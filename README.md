@@ -36,6 +36,75 @@ O ponto central da plataforma é o **Health Score**: um indicador dinâmico de 0
 
 ---
 
+## Estrutura do projeto
+
+```
+pettrack/
+├── app/
+│   ├── _layout.tsx               # Layout raiz com Stack
+│   ├── (tabs)/
+│   │   ├── _layout.tsx           # Tab bar com 4 abas
+│   │   ├── index.tsx             # Home - dashboard principal
+│   │   ├── meus-pets.tsx         # Lista de pets cadastrados
+│   │   ├── agenda.tsx            # Agenda de eventos
+│   │   └── perfil.tsx            # Perfil do tutor
+│   └── cadastro-pet/
+│       └── index.tsx             # Formulário de cadastro de pet
+├── assets/
+│   ├── logo.png
+│   └── logo2.png
+├── constants/
+│   └── Colors.ts                 # Paleta de cores do tema
+├── app.json
+├── babel.config.js
+├── package.json
+└── tsconfig.json
+```
+
+---
+
+## Como rodar o projeto
+
+### Pré-requisitos
+
+- Node.js 20 ou superior
+- Expo CLI instalado globalmente ou via `npx`
+- Aplicativo Expo Go no celular (iOS ou Android)
+
+### Instalação
+
+Clone o repositório e instale as dependências:
+
+```bash
+git clone https://github.com/seu-usuario/pettrack.git
+cd pettrack
+npm install
+```
+
+Instale as dependências do Expo:
+
+```bash
+npx expo install @react-native-async-storage/async-storage @expo/vector-icons expo-router
+```
+
+### Executando
+
+```bash
+npx expo start
+```
+
+Escaneie o QR Code com o aplicativo Expo Go ou rode direto no emulador:
+
+```bash
+# Android
+npx expo start --android
+
+# iOS
+npx expo start --ios
+```
+
+---
+
 ## Requisitos atendidos
 
 | Requisito | Implementacao |
@@ -56,10 +125,13 @@ O app segue o modelo de navegacao do Expo Router com file-based routing. Os dado
 
 ## Integrantes
 
-Thiago Rodrigues da Mota, RM: 563650  
-Moisés Waidemann Molinillo Júnior, RM: 563719  
-Gabriel Sbrana Campos, RM: 565849  
-Richard Freitas, RM: 566127  
+Nome | RM
+--- | ---
+Thiago Rodrigues da Mota | 563650
+Moisés Waidemann Molinillo Júnior | 563719
+Gabriel Sbrana Campos | 565849
+Richard Freitas | 566127
+
 ---
 
 ## Licenca
