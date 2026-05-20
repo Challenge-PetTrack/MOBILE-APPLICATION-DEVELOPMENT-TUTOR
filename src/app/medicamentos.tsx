@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../context/ThemeContext";
 
 const CATALOGO_LEMBRETES = [
   { id: "antipulgas", nome: "Antipulgas e Carrapatos", icone: "bug", intervaloDias: 30, color: "#ec4899" },
@@ -23,6 +24,8 @@ type Pet = {
 
 export default function MedicamentosScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
   
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
@@ -41,10 +44,15 @@ export default function MedicamentosScreen() {
     try {
       setLoading(true);
       
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (!sessionStr) return;
+      const user = JSON.parse(sessionStr);
+
       const petsData = await AsyncStorage.getItem("@pets");
       let loadedPets: Pet[] = [];
       if (petsData) {
-        loadedPets = JSON.parse(petsData);
+        const allPets = JSON.parse(petsData);
+        loadedPets = allPets.filter((p: any) => p.userId === user.id);
         setPets(loadedPets);
       }
 
@@ -103,59 +111,59 @@ export default function MedicamentosScreen() {
     const status = petRegistros[item.id];
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconContainer, { backgroundColor: item.color + '20' }]}>
+      <View style={s.card}>
+        <View style={s.cardHeader}>
+          <View style={[s.iconContainer, { backgroundColor: item.color + '20' }]}>
             <Ionicons name={item.icone as any} size={24} color={item.color} />
           </View>
-          <View style={styles.cardInfo}>
-            <Text style={styles.lembreteNome}>{item.nome}</Text>
-            <Text style={styles.intervaloTag}>A cada {item.intervaloDias} dias</Text>
+          <View style={s.cardInfo}>
+            <Text style={s.lembreteNome}>{item.nome}</Text>
+            <Text style={s.intervaloTag}>A cada {item.intervaloDias} dias</Text>
           </View>
         </View>
 
-        <View style={styles.datasBox}>
-          <View style={styles.dataItem}>
-            <Text style={styles.dataLabel}>Última Vez:</Text>
-            <Text style={styles.dataValue}>{status ? status.ultimaAplicacao : "Nunca"}</Text>
+        <View style={s.datasBox}>
+          <View style={s.dataItem}>
+            <Text style={s.dataLabel}>Última Vez:</Text>
+            <Text style={s.dataValue}>{status ? status.ultimaAplicacao : "Nunca"}</Text>
           </View>
-          <View style={styles.dataDivider} />
-          <View style={styles.dataItem}>
-            <Text style={styles.dataLabel}>Próxima:</Text>
-            <Text style={[styles.dataValue, { color: item.color }]}>{status ? status.proximaAplicacao : "Pendente"}</Text>
+          <View style={s.dataDivider} />
+          <View style={s.dataItem}>
+            <Text style={s.dataLabel}>Próxima:</Text>
+            <Text style={[s.dataValue, { color: item.color }]}>{status ? status.proximaAplicacao : "Pendente"}</Text>
           </View>
         </View>
 
         <TouchableOpacity 
-          style={[styles.btnAction, { backgroundColor: item.color }]}
+          style={[s.btnAction, { backgroundColor: item.color }]}
           onPress={() => registrarAplicacao(item.id, item.intervaloDias)}
         >
           <Ionicons name="checkmark-circle-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-          <Text style={styles.btnActionText}>Registrar Hoje</Text>
+          <Text style={s.btnActionText}>Registrar Hoje</Text>
         </TouchableOpacity>
       </View>
     );
   };
 
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="paw-outline" size={64} color="#9ca3af" />
-      <Text style={styles.emptyTitle}>Nenhum pet encontrado</Text>
-      <Text style={styles.emptySubtitle}>Cadastre um pet primeiro para organizar os medicamentos.</Text>
-      <TouchableOpacity style={styles.addButton} onPress={() => router.push("/cadastro")}>
+    <View style={s.emptyContainer}>
+      <Ionicons name="paw-outline" size={64} color={colors.textMuted} />
+      <Text style={s.emptyTitle}>Nenhum pet encontrado</Text>
+      <Text style={s.emptySubtitle}>Cadastre um pet primeiro para organizar os medicamentos.</Text>
+      <TouchableOpacity style={s.addButton} onPress={() => router.push("/cadastro")}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-        <Text style={styles.addButtonText}>Cadastrar um Pet</Text>
+        <Text style={s.addButtonText}>Cadastrar um Pet</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a2e" />
+    <View style={s.container}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Lembretes</Text>
+        <Text style={s.title}>Lembretes</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -167,23 +175,23 @@ export default function MedicamentosScreen() {
         renderEmptyState()
       ) : (
         <>
-          <View style={styles.petSelectorContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.petSelectorScroll}>
+          <View style={s.petSelectorContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.petSelectorScroll}>
               {pets.map(pet => {
                 const isSelected = pet.id === selectedPetId;
                 return (
                   <TouchableOpacity
                     key={pet.id}
-                    style={[styles.petPill, isSelected && styles.petPillSelected]}
+                    style={[s.petPill, isSelected && s.petPillSelected]}
                     onPress={() => setSelectedPetId(pet.id)}
                   >
                     <Ionicons 
                       name="paw" 
                       size={16} 
-                      color={isSelected ? "#fff" : "#4b5563"} 
+                      color={isSelected ? "#fff" : colors.textSecondary} 
                       style={{ marginRight: 6 }}
                     />
-                    <Text style={[styles.petPillText, isSelected && styles.petPillTextSelected]}>
+                    <Text style={[s.petPillText, isSelected && s.petPillTextSelected]}>
                       {pet.nome}
                     </Text>
                   </TouchableOpacity>
@@ -196,7 +204,7 @@ export default function MedicamentosScreen() {
             data={CATALOGO_LEMBRETES}
             keyExtractor={item => item.id}
             renderItem={renderLembrete}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={s.listContainer}
             showsVerticalScrollIndicator={false}
           />
         </>
@@ -205,10 +213,10 @@ export default function MedicamentosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
@@ -217,13 +225,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -235,12 +243,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   petSelectorContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "#fff",
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
   },
   petSelectorScroll: {
     paddingHorizontal: 20,
@@ -250,7 +258,7 @@ const styles = StyleSheet.create({
   petPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surfaceSecondary,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -269,7 +277,7 @@ const styles = StyleSheet.create({
   petPillText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#4b5563",
+    color: colors.textSecondary,
   },
   petPillTextSelected: {
     color: "#fff",
@@ -288,13 +296,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#4b5563",
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 16,
-    color: "#6b7280",
+    color: colors.textSecondary,
     textAlign: "center",
     marginBottom: 32,
   },
@@ -312,7 +320,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
@@ -341,17 +349,17 @@ const styles = StyleSheet.create({
   lembreteNome: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#1f2937",
+    color: colors.text,
     marginBottom: 4,
   },
   intervaloTag: {
     fontSize: 13,
-    color: "#6b7280",
+    color: colors.textSecondary,
     fontWeight: "500",
   },
   datasBox: {
     flexDirection: "row",
-    backgroundColor: "#f9fafb",
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -362,17 +370,17 @@ const styles = StyleSheet.create({
   },
   dataLabel: {
     fontSize: 12,
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   dataValue: {
     fontSize: 15,
     fontWeight: "bold",
-    color: "#374151",
+    color: colors.text,
   },
   dataDivider: {
     width: 1,
-    backgroundColor: "#e5e7eb",
+    backgroundColor: colors.border,
   },
   btnAction: {
     flexDirection: "row",

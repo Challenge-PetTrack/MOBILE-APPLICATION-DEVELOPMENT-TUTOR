@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../context/ThemeContext";
 
 type Pet = {
   id: string;
@@ -25,6 +26,9 @@ const VACINAS_MAP: Record<string, string> = {
 
 export default function PetScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
+
   const [pets, setPets] = useState<Pet[]>([]);
   const [vacinasRecord, setVacinasRecord] = useState<any>({});
   const [loading, setLoading] = useState(true);
@@ -39,9 +43,14 @@ export default function PetScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (!sessionStr) return;
+      const user = JSON.parse(sessionStr);
+
       const savedPets = await AsyncStorage.getItem("@pets");
       if (savedPets) {
-        setPets(JSON.parse(savedPets));
+        const allPets = JSON.parse(savedPets);
+        setPets(allPets.filter((p: any) => p.userId === user.id));
       } else {
         setPets([]);
       }
@@ -87,63 +96,63 @@ export default function PetScreen() {
   };
 
   const renderPetCard = ({ item }: { item: Pet }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitleContainer}>
+    <View style={s.card}>
+      <View style={s.cardHeader}>
+        <View style={s.cardTitleContainer}>
           <Ionicons name="paw" size={24} color="#4f46e5" />
-          <Text style={styles.petName}>{item.nome}</Text>
+          <Text style={s.petName}>{item.nome}</Text>
         </View>
-        <TouchableOpacity onPress={() => removePet(item.id)} style={styles.deleteButton}>
+        <TouchableOpacity onPress={() => removePet(item.id)} style={s.deleteButton}>
           <Ionicons name="trash-outline" size={20} color="#ef4444" />
         </TouchableOpacity>
       </View>
       
-      <View style={styles.cardBody}>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Espécie:</Text>
-          <Text style={styles.infoValue}>{item.especie}</Text>
+      <View style={s.cardBody}>
+        <View style={s.infoRow}>
+          <Text style={s.infoLabel}>Espécie:</Text>
+          <Text style={s.infoValue}>{item.especie}</Text>
         </View>
         {item.raca ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Raça:</Text>
-            <Text style={styles.infoValue}>{item.raca}</Text>
+          <View style={s.infoRow}>
+            <Text style={s.infoLabel}>Raça:</Text>
+            <Text style={s.infoValue}>{item.raca}</Text>
           </View>
         ) : null}
-        <View style={styles.row}>
+        <View style={s.row}>
           {item.idade ? (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoBoxLabel}>Idade</Text>
-              <Text style={styles.infoBoxValue}>{item.idade} anos</Text>
+            <View style={s.infoBox}>
+              <Text style={s.infoBoxLabel}>Idade</Text>
+              <Text style={s.infoBoxValue}>{item.idade} anos</Text>
             </View>
           ) : null}
           {item.peso ? (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoBoxLabel}>Peso</Text>
-              <Text style={styles.infoBoxValue}>{item.peso} kg</Text>
+            <View style={s.infoBox}>
+              <Text style={s.infoBoxLabel}>Peso</Text>
+              <Text style={s.infoBoxValue}>{item.peso} kg</Text>
             </View>
           ) : null}
         </View>
         
-        <TouchableOpacity style={styles.fichaButton} onPress={() => abrirFicha(item)}>
+        <TouchableOpacity style={s.fichaButton} onPress={() => abrirFicha(item)}>
           <Ionicons name="document-text-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-          <Text style={styles.fichaButtonText}>Gerar Ficha Clínica</Text>
+          <Text style={s.fichaButtonText}>Gerar Ficha Clínica</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a2e" />
+    <View style={s.container}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Meus Pets</Text>
+        <Text style={s.title}>Meus Pets</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
-        <View style={styles.centerContainer}>
+        <View style={s.centerContainer}>
           <ActivityIndicator size="large" color="#4f46e5" />
         </View>
       ) : pets.length > 0 ? (
@@ -151,60 +160,60 @@ export default function PetScreen() {
           data={pets}
           keyExtractor={(item) => item.id}
           renderItem={renderPetCard}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={s.listContainer}
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="sad-outline" size={64} color="#9ca3af" />
-          <Text style={styles.emptyTitle}>Nenhum pet cadastrado</Text>
-          <Text style={styles.emptySubtitle}>Você ainda não possui nenhum pet na sua lista.</Text>
-          <TouchableOpacity style={styles.addButton} onPress={() => router.push("/cadastro")}>
+        <View style={s.emptyContainer}>
+          <Ionicons name="sad-outline" size={64} color={colors.textMuted} />
+          <Text style={s.emptyTitle}>Nenhum pet cadastrado</Text>
+          <Text style={s.emptySubtitle}>Você ainda não possui nenhum pet na sua lista.</Text>
+          <TouchableOpacity style={s.addButton} onPress={() => router.push("/cadastro")}>
             <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.addButtonText}>Cadastrar um Pet</Text>
+            <Text style={s.addButtonText}>Cadastrar um Pet</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Modal Ficha Clínica */}
       <Modal visible={!!fichaPet} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Histórico Veterinário</Text>
-              <TouchableOpacity onPress={fecharFicha} style={styles.closeModalButton}>
-                <Ionicons name="close" size={24} color="#4b5563" />
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Histórico Veterinário</Text>
+              <TouchableOpacity onPress={fecharFicha} style={s.closeModalButton}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {fichaPet && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.fichaSection}>
-                  <Text style={styles.fichaSectionTitle}>Dados do Pet</Text>
-                  <Text style={styles.fichaData}><Text style={styles.fichaLabel}>Nome:</Text> {fichaPet.nome}</Text>
-                  <Text style={styles.fichaData}><Text style={styles.fichaLabel}>Espécie:</Text> {fichaPet.especie}</Text>
-                  <Text style={styles.fichaData}><Text style={styles.fichaLabel}>Raça:</Text> {fichaPet.raca || "Não informada"}</Text>
-                  <Text style={styles.fichaData}><Text style={styles.fichaLabel}>Idade:</Text> {fichaPet.idade || "-"} anos</Text>
-                  <Text style={styles.fichaData}><Text style={styles.fichaLabel}>Peso:</Text> {fichaPet.peso || "-"} kg</Text>
+                <View style={s.fichaSection}>
+                  <Text style={s.fichaSectionTitle}>Dados do Pet</Text>
+                  <Text style={s.fichaData}><Text style={s.fichaLabel}>Nome:</Text> {fichaPet.nome}</Text>
+                  <Text style={s.fichaData}><Text style={s.fichaLabel}>Espécie:</Text> {fichaPet.especie}</Text>
+                  <Text style={s.fichaData}><Text style={s.fichaLabel}>Raça:</Text> {fichaPet.raca || "Não informada"}</Text>
+                  <Text style={s.fichaData}><Text style={s.fichaLabel}>Idade:</Text> {fichaPet.idade || "-"} anos</Text>
+                  <Text style={s.fichaData}><Text style={s.fichaLabel}>Peso:</Text> {fichaPet.peso || "-"} kg</Text>
                 </View>
 
-                <View style={styles.fichaSection}>
-                  <Text style={styles.fichaSectionTitle}>Imunização Realizada</Text>
+                <View style={s.fichaSection}>
+                  <Text style={s.fichaSectionTitle}>Imunização Realizada</Text>
                   {getVacinasTomadas(fichaPet.id).length > 0 ? (
                     getVacinasTomadas(fichaPet.id).map((v, i) => (
-                      <View key={i} style={styles.vacinaFichaItem}>
+                      <View key={i} style={s.vacinaFichaItem}>
                         <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                        <Text style={styles.vacinaFichaNome}>{v.nome}</Text>
-                        <Text style={styles.vacinaFichaData}>{v.data}</Text>
+                        <Text style={s.vacinaFichaNome}>{v.nome}</Text>
+                        <Text style={s.vacinaFichaData}>{v.data}</Text>
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.fichaEmptyText}>Nenhuma vacina registrada para este pet.</Text>
+                    <Text style={s.fichaEmptyText}>Nenhuma vacina registrada para este pet.</Text>
                   )}
                 </View>
 
-                <View style={styles.fichaFooter}>
-                  <Text style={styles.fichaFooterText}>Gerado via PetTrack App</Text>
+                <View style={s.fichaFooter}>
+                  <Text style={s.fichaFooterText}>Gerado via PetTrack App</Text>
                 </View>
               </ScrollView>
             )}
@@ -215,10 +224,10 @@ export default function PetScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
@@ -227,13 +236,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -245,7 +254,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   listContainer: {
     padding: 24,
@@ -266,13 +275,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#4b5563",
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 16,
-    color: "#6b7280",
+    color: colors.textSecondary,
     textAlign: "center",
     marginBottom: 32,
   },
@@ -295,7 +304,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
@@ -311,7 +320,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: colors.borderLight,
     paddingBottom: 16,
   },
   cardTitleContainer: {
@@ -321,7 +330,7 @@ const styles = StyleSheet.create({
   petName: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1f2937",
+    color: colors.text,
     marginLeft: 12,
   },
   deleteButton: {
@@ -340,12 +349,12 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    color: "#6b7280",
+    color: colors.textSecondary,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
+    color: colors.text,
   },
   row: {
     flexDirection: "row",
@@ -355,14 +364,14 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 12,
     padding: 12,
     alignItems: "center",
   },
   infoBoxLabel: {
     fontSize: 12,
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   infoBoxValue: {
@@ -390,7 +399,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
@@ -410,38 +419,38 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   closeModalButton: {
     padding: 4,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 16,
   },
   fichaSection: {
     marginBottom: 24,
-    backgroundColor: "#f9fafb",
+    backgroundColor: colors.surfaceSecondary,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: colors.borderLight,
   },
   fichaSectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#374151",
+    color: colors.text,
     marginBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: colors.border,
     paddingBottom: 8,
   },
   fichaData: {
     fontSize: 15,
-    color: "#1f2937",
+    color: colors.text,
     marginBottom: 8,
   },
   fichaLabel: {
     fontWeight: "600",
-    color: "#6b7280",
+    color: colors.textSecondary,
   },
   vacinaFichaItem: {
     flexDirection: "row",
@@ -451,17 +460,17 @@ const styles = StyleSheet.create({
   vacinaFichaNome: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
+    color: colors.text,
     marginLeft: 8,
     flex: 1,
   },
   vacinaFichaData: {
     fontSize: 13,
-    color: "#6b7280",
+    color: colors.textSecondary,
   },
   fichaEmptyText: {
     fontSize: 14,
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontStyle: "italic",
     textAlign: "center",
     marginTop: 8,
@@ -473,7 +482,7 @@ const styles = StyleSheet.create({
   },
   fichaFooterText: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontWeight: "500",
   },
 });

@@ -3,9 +3,13 @@ import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../context/ThemeContext";
 
 export default function Cadastro() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
+
   const [nome, setNome] = useState("");
   const [especie, setEspecie] = useState("");
   const [raca, setRaca] = useState("");
@@ -19,8 +23,16 @@ export default function Cadastro() {
     }
 
     try {
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (!sessionStr) {
+        Alert.alert("Erro", "Sessão inválida. Por favor, faça login novamente.");
+        return;
+      }
+      const user = JSON.parse(sessionStr);
+
       const newPet = {
         id: Date.now().toString(),
+        userId: user.id,
         nome,
         especie,
         raca,
@@ -53,74 +65,74 @@ export default function Cadastro() {
       style={{ flex: 1 }} 
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1a1a2e" />
+      <ScrollView style={s.container} contentContainerStyle={s.contentContainer}>
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Cadastrar Pet</Text>
+          <Text style={s.title}>Cadastrar Pet</Text>
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={styles.photoContainer}>
-          <View style={styles.photoCircle}>
-            <Ionicons name="camera" size={40} color="#9ca3af" />
+        <View style={s.photoContainer}>
+          <View style={s.photoCircle}>
+            <Ionicons name="camera" size={40} color={colors.textMuted} />
           </View>
-          <Text style={styles.photoText}>Adicionar Foto</Text>
+          <Text style={s.photoText}>Adicionar Foto</Text>
         </View>
 
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nome do Pet</Text>
+        <View style={s.form}>
+          <View style={s.inputGroup}>
+            <Text style={s.label}>Nome do Pet</Text>
             <TextInput 
-              style={styles.input} 
+              style={s.input} 
               placeholder="Ex: Rex" 
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={nome}
               onChangeText={setNome}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Espécie</Text>
+          <View style={s.inputGroup}>
+            <Text style={s.label}>Espécie</Text>
             <TextInput 
-              style={styles.input} 
+              style={s.input} 
               placeholder="Ex: Cachorro, Gato" 
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={especie}
               onChangeText={setEspecie}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Raça</Text>
+          <View style={s.inputGroup}>
+            <Text style={s.label}>Raça</Text>
             <TextInput 
-              style={styles.input} 
+              style={s.input} 
               placeholder="Ex: Labrador" 
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={raca}
               onChangeText={setRaca}
             />
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Idade (anos)</Text>
+          <View style={s.row}>
+            <View style={[s.inputGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={s.label}>Idade (anos)</Text>
               <TextInput 
-                style={styles.input} 
+                style={s.input} 
                 placeholder="Ex: 3" 
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 value={idade}
                 onChangeText={setIdade}
               />
             </View>
-            <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Peso (kg)</Text>
+            <View style={[s.inputGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={s.label}>Peso (kg)</Text>
               <TextInput 
-                style={styles.input} 
+                style={s.input} 
                 placeholder="Ex: 15.5" 
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 value={peso}
                 onChangeText={setPeso}
@@ -128,8 +140,8 @@ export default function Cadastro() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleCadastrar}>
-            <Text style={styles.buttonText}>Salvar Cadastro</Text>
+          <TouchableOpacity style={s.button} onPress={handleCadastrar}>
+            <Text style={s.buttonText}>Salvar Cadastro</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -137,10 +149,10 @@ export default function Cadastro() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   contentContainer: {
     padding: 24,
@@ -157,7 +169,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -169,7 +181,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   photoContainer: {
     alignItems: "center",
@@ -179,7 +191,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: "#e5e7eb",
+    backgroundColor: colors.border,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -193,7 +205,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   form: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 24,
     padding: 24,
     shadowColor: "#000",
@@ -212,15 +224,15 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#4b5563",
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.inputBackground,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    color: "#1f2937",
+    color: colors.text,
     borderWidth: 1,
     borderColor: "transparent",
   },

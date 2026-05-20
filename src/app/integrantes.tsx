@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native
 import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../context/ThemeContext";
 
 const integrantes = [
   { id: "1", nome: "Gabriel Sbrana", rm: "RM - 565849", foto: require("../../images/integrantes/gabriel.jpeg"), descricao: "Olá, sou o Gabriel. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP." },
@@ -12,38 +13,40 @@ const integrantes = [
 
 export default function Integrantes() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a2e" />
+    <View style={s.container}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Nossa Equipe</Text>
+        <Text style={s.title}>Nossa Equipe</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <FlatList
         data={integrantes}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={s.listContainer}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={styles.pageHeader}>
-            <Text style={styles.pageSubtitle}>Conheça os desenvolvedores do PetTrack</Text>
+          <View style={s.pageHeader}>
+            <Text style={s.pageSubtitle}>Conheça os desenvolvedores do PetTrack</Text>
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Image source={item.foto} style={styles.foto} />
-              <View style={styles.cardTitleContainer}>
-                <Text style={styles.nome}>{item.nome}</Text>
-                <Text style={styles.rm}>{item.rm}</Text>
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Image source={item.foto} style={s.foto} />
+              <View style={s.cardTitleContainer}>
+                <Text style={s.nome}>{item.nome}</Text>
+                <Text style={s.rm}>{item.rm}</Text>
               </View>
             </View>
-            <View style={styles.cardBody}>
-              <Text style={styles.descricao}>{item.descricao}</Text>
+            <View style={s.cardBody}>
+              <Text style={s.descricao}>{item.descricao}</Text>
             </View>
           </View>
         )}
@@ -52,10 +55,10 @@ export default function Integrantes() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
@@ -64,13 +67,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -82,14 +85,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   pageHeader: {
     marginBottom: 24,
   },
   pageSubtitle: {
     fontSize: 16,
-    color: "#6b7280",
+    color: colors.textSecondary,
     textAlign: "center",
   },
   listContainer: {
@@ -98,7 +101,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
@@ -113,7 +116,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: colors.borderLight,
     paddingBottom: 16,
   },
   foto: {
@@ -122,7 +125,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     marginRight: 16,
     borderWidth: 2,
-    borderColor: "#f3f4f6",
+    borderColor: colors.borderLight,
   },
   cardTitleContainer: {
     flex: 1,
@@ -130,7 +133,7 @@ const styles = StyleSheet.create({
   nome: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1f2937",
+    color: colors.text,
     marginBottom: 4,
   },
   rm: {
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
   },
   descricao: {
     fontSize: 14,
-    color: "#4b5563",
+    color: colors.textSecondary,
     lineHeight: 22,
   },
 });

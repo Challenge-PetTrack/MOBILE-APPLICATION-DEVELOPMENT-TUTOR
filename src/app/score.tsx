@@ -2,9 +2,12 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-nati
 import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useTheme } from "../context/ThemeContext";
 
 export default function ScoreScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
   
   const [tasks, setTasks] = useState([
     { id: 1, title: "Passeio Diário", points: 30, completed: false, icon: "walk" },
@@ -41,44 +44,44 @@ export default function ScoreScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a2e" />
+    <ScrollView style={s.container} contentContainerStyle={s.contentContainer} showsVerticalScrollIndicator={false}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Score do Pet</Text>
+        <Text style={s.title}>Score do Pet</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.scoreContainer}>
-        <View style={[styles.scoreCircle, { borderColor: getScoreColor() }]}>
-          <Text style={[styles.scoreText, { color: getScoreColor() }]}>{score}</Text>
-          <Text style={styles.scoreMax}>/ 100</Text>
+      <View style={s.scoreContainer}>
+        <View style={[s.scoreCircle, { borderColor: getScoreColor() }]}>
+          <Text style={[s.scoreText, { color: getScoreColor() }]}>{score}</Text>
+          <Text style={s.scoreMax}>/ 100</Text>
         </View>
-        <Text style={styles.scoreMessage}>{getScoreMessage()}</Text>
+        <Text style={s.scoreMessage}>{getScoreMessage()}</Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Tarefas Diárias</Text>
-      <Text style={styles.sectionSubtitle}>Complete as atividades para aumentar o bem-estar do seu pet.</Text>
+      <Text style={s.sectionTitle}>Tarefas Diárias</Text>
+      <Text style={s.sectionSubtitle}>Complete as atividades para aumentar o bem-estar do seu pet.</Text>
 
-      <View style={styles.tasksContainer}>
+      <View style={s.tasksContainer}>
         {tasks.map(task => (
           <TouchableOpacity 
             key={task.id} 
-            style={[styles.taskCard, task.completed && styles.taskCardCompleted]}
+            style={[s.taskCard, task.completed && s.taskCardCompleted]}
             onPress={() => toggleTask(task.id)}
             activeOpacity={0.7}
           >
-            <View style={[styles.iconContainer, task.completed && styles.iconContainerCompleted]}>
+            <View style={[s.iconContainer, task.completed && s.iconContainerCompleted]}>
               <Ionicons name={task.icon as any} size={24} color={task.completed ? "#fff" : "#f59e0b"} />
             </View>
-            <View style={styles.taskInfo}>
-              <Text style={[styles.taskTitle, task.completed && styles.taskTitleCompleted]}>
+            <View style={s.taskInfo}>
+              <Text style={[s.taskTitle, task.completed && s.taskTitleCompleted]}>
                 {task.title}
               </Text>
-              <Text style={styles.taskPoints}>+{task.points} pts</Text>
+              <Text style={s.taskPoints}>+{task.points} pts</Text>
             </View>
-            <View style={[styles.checkbox, task.completed && styles.checkboxCompleted]}>
+            <View style={[s.checkbox, task.completed && s.checkboxCompleted]}>
               {task.completed && <Ionicons name="checkmark" size={16} color="#fff" />}
             </View>
           </TouchableOpacity>
@@ -88,10 +91,10 @@ export default function ScoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   contentContainer: {
     padding: 24,
@@ -108,7 +111,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -120,11 +123,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   scoreContainer: {
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 24,
     padding: 32,
     marginBottom: 32,
@@ -149,25 +152,25 @@ const styles = StyleSheet.create({
   },
   scoreMax: {
     fontSize: 16,
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontWeight: "600",
     marginTop: -8,
   },
   scoreMessage: {
     fontSize: 16,
-    color: "#4b5563",
+    color: colors.textSecondary,
     textAlign: "center",
     fontWeight: "500",
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
     marginBottom: 4,
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginBottom: 20,
   },
   tasksContainer: {
@@ -176,11 +179,11 @@ const styles = StyleSheet.create({
   taskCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: colors.borderLight,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
@@ -209,7 +212,7 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#374151",
+    color: colors.text,
     marginBottom: 4,
   },
   taskTitleCompleted: {
@@ -226,7 +229,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: "#d1d5db",
+    borderColor: colors.border,
     justifyContent: "center",
     alignItems: "center",
   },

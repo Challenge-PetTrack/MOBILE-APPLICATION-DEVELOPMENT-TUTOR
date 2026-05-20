@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../context/ThemeContext";
 
 // Lista fixa de vacinas (Catálogo)
 const CATALOGO_VACINAS = [
@@ -56,6 +57,8 @@ type Pet = {
 
 export default function VacinasScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
   
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
@@ -73,12 +76,16 @@ export default function VacinasScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (!sessionStr) return;
+      const user = JSON.parse(sessionStr);
       
       // Carregar pets cadastrados
       const petsData = await AsyncStorage.getItem("@pets");
       let loadedPets: Pet[] = [];
       if (petsData) {
-        loadedPets = JSON.parse(petsData);
+        const allPets = JSON.parse(petsData);
+        loadedPets = allPets.filter((p: any) => p.userId === user.id);
         setPets(loadedPets);
       }
 
@@ -139,40 +146,40 @@ export default function VacinasScreen() {
     const isTomada = status?.tomada === true;
 
     return (
-      <View style={[styles.card, isTomada ? styles.cardTomada : styles.cardPendente]}>
-        <View style={styles.cardHeader}>
-          <View style={styles.iconContainer}>
+      <View style={[s.card, isTomada ? s.cardTomada : s.cardPendente]}>
+        <View style={s.cardHeader}>
+          <View style={s.iconContainer}>
             <Ionicons 
               name="medkit" 
               size={24} 
               color={isTomada ? "#10b981" : "#ef4444"} 
             />
           </View>
-          <View style={styles.cardInfo}>
-            <Text style={styles.vacinaNome}>{item.nome}</Text>
-            <Text style={styles.recomendacaoTag}>{item.recomendacao}</Text>
+          <View style={s.cardInfo}>
+            <Text style={s.vacinaNome}>{item.nome}</Text>
+            <Text style={s.recomendacaoTag}>{item.recomendacao}</Text>
           </View>
         </View>
         
-        <Text style={styles.vacinaDescricao}>{item.descricao}</Text>
+        <Text style={s.vacinaDescricao}>{item.descricao}</Text>
 
-        <View style={styles.cardFooter}>
+        <View style={s.cardFooter}>
           {isTomada ? (
-            <View style={styles.dataContainer}>
-              <Ionicons name="calendar-outline" size={16} color="#4b5563" />
-              <Text style={styles.dataTexto}>Aplicada: {status.dataAplicacao}</Text>
+            <View style={s.dataContainer}>
+              <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+              <Text style={s.dataTexto}>Aplicada: {status.dataAplicacao}</Text>
             </View>
           ) : (
-            <View style={styles.dataContainer}>
+            <View style={s.dataContainer}>
               <Ionicons name="time-outline" size={16} color="#ef4444" />
-              <Text style={[styles.dataTexto, { color: "#ef4444" }]}>Pendente</Text>
+              <Text style={[s.dataTexto, { color: "#ef4444" }]}>Pendente</Text>
             </View>
           )}
           <TouchableOpacity 
-            style={[styles.btnAction, isTomada ? styles.btnDesmarcar : styles.btnMarcar]}
+            style={[s.btnAction, isTomada ? s.btnDesmarcar : s.btnMarcar]}
             onPress={() => toggleStatus(item.id)}
           >
-            <Text style={[styles.btnActionText, isTomada ? { color: "#4b5563" } : { color: "#fff" }]}>
+            <Text style={[s.btnActionText, isTomada ? { color: colors.textSecondary } : { color: "#fff" }]}>
               {isTomada ? "Desfazer" : "Registrar"}
             </Text>
           </TouchableOpacity>
@@ -182,13 +189,13 @@ export default function VacinasScreen() {
   };
 
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="paw-outline" size={64} color="#9ca3af" />
-      <Text style={styles.emptyTitle}>Nenhum pet encontrado</Text>
-      <Text style={styles.emptySubtitle}>Cadastre um pet primeiro para gerenciar suas vacinas.</Text>
-      <TouchableOpacity style={styles.addButton} onPress={() => router.push("/cadastro")}>
+    <View style={s.emptyContainer}>
+      <Ionicons name="paw-outline" size={64} color={colors.textMuted} />
+      <Text style={s.emptyTitle}>Nenhum pet encontrado</Text>
+      <Text style={s.emptySubtitle}>Cadastre um pet primeiro para gerenciar suas vacinas.</Text>
+      <TouchableOpacity style={s.addButton} onPress={() => router.push("/cadastro")}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-        <Text style={styles.addButtonText}>Cadastrar um Pet</Text>
+        <Text style={s.addButtonText}>Cadastrar um Pet</Text>
       </TouchableOpacity>
     </View>
   );
@@ -198,12 +205,12 @@ export default function VacinasScreen() {
   const pendentesCount = CATALOGO_VACINAS.length - tomadasCount;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a2e" />
+    <View style={s.container}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Carteira de Vacinas</Text>
+        <Text style={s.title}>Carteira de Vacinas</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -216,23 +223,23 @@ export default function VacinasScreen() {
       ) : (
         <>
           {/* Seletor de Pets */}
-          <View style={styles.petSelectorContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.petSelectorScroll}>
+          <View style={s.petSelectorContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.petSelectorScroll}>
               {pets.map(pet => {
                 const isSelected = pet.id === selectedPetId;
                 return (
                   <TouchableOpacity
                     key={pet.id}
-                    style={[styles.petPill, isSelected && styles.petPillSelected]}
+                    style={[s.petPill, isSelected && s.petPillSelected]}
                     onPress={() => setSelectedPetId(pet.id)}
                   >
                     <Ionicons 
                       name="paw" 
                       size={16} 
-                      color={isSelected ? "#fff" : "#4b5563"} 
+                      color={isSelected ? "#fff" : colors.textSecondary} 
                       style={{ marginRight: 6 }}
                     />
-                    <Text style={[styles.petPillText, isSelected && styles.petPillTextSelected]}>
+                    <Text style={[s.petPillText, isSelected && s.petPillTextSelected]}>
                       {pet.nome}
                     </Text>
                   </TouchableOpacity>
@@ -245,18 +252,18 @@ export default function VacinasScreen() {
             data={CATALOGO_VACINAS}
             keyExtractor={item => item.id}
             renderItem={renderVacina}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={s.listContainer}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
-              <View style={styles.summaryContainer}>
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryNumber}>{tomadasCount}</Text>
-                  <Text style={styles.summaryLabel}>Aplicadas</Text>
+              <View style={s.summaryContainer}>
+                <View style={s.summaryBox}>
+                  <Text style={s.summaryNumber}>{tomadasCount}</Text>
+                  <Text style={s.summaryLabel}>Aplicadas</Text>
                 </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryBox}>
-                  <Text style={[styles.summaryNumber, { color: "#ef4444" }]}>{pendentesCount}</Text>
-                  <Text style={styles.summaryLabel}>Pendentes</Text>
+                <View style={s.summaryDivider} />
+                <View style={s.summaryBox}>
+                  <Text style={[s.summaryNumber, { color: "#ef4444" }]}>{pendentesCount}</Text>
+                  <Text style={s.summaryLabel}>Pendentes</Text>
                 </View>
               </View>
             }
@@ -267,10 +274,10 @@ export default function VacinasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
@@ -279,13 +286,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 16,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: colors.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -297,12 +304,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#1a1a2e",
+    color: colors.text,
   },
   petSelectorContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "#fff",
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
   },
   petSelectorScroll: {
     paddingHorizontal: 20,
@@ -312,7 +319,7 @@ const styles = StyleSheet.create({
   petPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surfaceSecondary,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -331,7 +338,7 @@ const styles = StyleSheet.create({
   petPillText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#4b5563",
+    color: colors.textSecondary,
   },
   petPillTextSelected: {
     color: "#fff",
@@ -349,13 +356,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#4b5563",
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 16,
-    color: "#6b7280",
+    color: colors.textSecondary,
     textAlign: "center",
     marginBottom: 32,
   },
@@ -379,7 +386,7 @@ const styles = StyleSheet.create({
   },
   summaryContainer: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 20,
     marginBottom: 24,
@@ -401,17 +408,17 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginTop: 4,
     fontWeight: "500",
   },
   summaryDivider: {
     width: 1,
     height: 40,
-    backgroundColor: "#e5e7eb",
+    backgroundColor: colors.border,
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -437,7 +444,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surfaceSecondary,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -448,7 +455,7 @@ const styles = StyleSheet.create({
   vacinaNome: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#1f2937",
+    color: colors.text,
   },
   recomendacaoTag: {
     fontSize: 12,
@@ -458,7 +465,7 @@ const styles = StyleSheet.create({
   },
   vacinaDescricao: {
     fontSize: 13,
-    color: "#6b7280",
+    color: colors.textSecondary,
     lineHeight: 18,
     marginBottom: 16,
   },
@@ -467,7 +474,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
+    borderTopColor: colors.borderLight,
     paddingTop: 16,
   },
   dataContainer: {
@@ -476,7 +483,7 @@ const styles = StyleSheet.create({
   },
   dataTexto: {
     fontSize: 14,
-    color: "#4b5563",
+    color: colors.textSecondary,
     marginLeft: 6,
     fontWeight: "500",
   },
@@ -489,7 +496,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ef4444",
   },
   btnDesmarcar: {
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surfaceSecondary,
   },
   btnActionText: {
     fontWeight: "bold",
