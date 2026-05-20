@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Modal, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Modal, ScrollView, Image } from "react-native";
 import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import * as ImagePicker from "expo-image-picker";
 
 type Pet = {
   id: string;
@@ -13,6 +14,8 @@ type Pet = {
   idade: string;
   peso: string;
   createdAt: string;
+  fotoUri?: string | null;
+  userId?: string;
 };
 
 const VACINAS_MAP: Record<string, string> = {
@@ -99,7 +102,13 @@ export default function PetScreen() {
     <View style={s.card}>
       <View style={s.cardHeader}>
         <View style={s.cardTitleContainer}>
-          <Ionicons name="paw" size={24} color="#4f46e5" />
+          {item.fotoUri ? (
+            <Image source={{ uri: item.fotoUri }} style={s.petAvatar} />
+          ) : (
+            <View style={s.petAvatarPlaceholder}>
+              <Ionicons name="paw" size={22} color="#4f46e5" />
+            </View>
+          )}
           <Text style={s.petName}>{item.nome}</Text>
         </View>
         <TouchableOpacity onPress={() => removePet(item.id)} style={s.deleteButton}>
@@ -188,6 +197,12 @@ export default function PetScreen() {
 
             {fichaPet && (
               <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Foto do pet na ficha */}
+                {fichaPet.fotoUri && (
+                  <View style={s.fichaPhotoContainer}>
+                    <Image source={{ uri: fichaPet.fotoUri }} style={s.fichaPhoto} />
+                  </View>
+                )}
                 <View style={s.fichaSection}>
                   <Text style={s.fichaSectionTitle}>Dados do Pet</Text>
                   <Text style={s.fichaData}><Text style={s.fichaLabel}>Nome:</Text> {fichaPet.nome}</Text>
@@ -322,6 +337,34 @@ const makeStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
     paddingBottom: 16,
+  },
+  petAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: "#4f46e5",
+    marginRight: 4,
+  },
+  petAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#e0e7ff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 4,
+  },
+  fichaPhotoContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  fichaPhoto: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#4f46e5",
   },
   cardTitleContainer: {
     flexDirection: "row",

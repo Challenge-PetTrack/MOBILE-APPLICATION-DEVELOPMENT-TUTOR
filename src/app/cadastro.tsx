@@ -1,9 +1,13 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import {
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
+  KeyboardAvoidingView, Platform, Alert, Image as RNImage
+} from "react-native";
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import * as ImagePicker from "expo-image-picker";
 
 export default function Cadastro() {
   const router = useRouter();
@@ -15,6 +19,64 @@ export default function Cadastro() {
   const [raca, setRaca] = useState("");
   const [idade, setIdade] = useState("");
   const [peso, setPeso] = useState("");
+  const [fotoUri, setFotoUri] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permissão necessária",
+        "Precisamos acessar sua galeria para adicionar a foto do pet.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true, // Salvar como base64 para persistência no AsyncStorage
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      // Guardar URI local para exibição e base64 para persistência
+      setFotoUri(asset.uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permissão necessária", "Precisamos acessar sua câmera para tirar a foto.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setFotoUri(result.assets[0].uri);
+    }
+  };
+
+  const handleFotoPress = () => {
+    Alert.alert(
+      "Foto do Pet",
+      "Como deseja adicionar a foto?",
+      [
+        { text: "Câmera", onPress: takePhoto },
+        { text: "Galeria", onPress: pickImage },
+        { text: "Cancelar", style: "cancel" },
+      ]
+    );
+  };
 
   const handleCadastrar = async () => {
     if (!nome.trim() || !especie.trim()) {
@@ -38,6 +100,7 @@ export default function Cadastro() {
         raca,
         idade,
         peso,
+        fotoUri: fotoUri || null,
         createdAt: new Date().toISOString()
       };
 
@@ -48,11 +111,9 @@ export default function Cadastro() {
       await AsyncStorage.setItem("@pets", JSON.stringify(updatedPets));
 
       Alert.alert(
-        "Sucesso!",
+        "Sucesso! 🐾",
         "O pet foi cadastrado com sucesso.",
-        [
-          { text: "OK", onPress: () => router.back() }
-        ]
+        [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (error) {
       console.error("Erro ao salvar pet:", error);
@@ -74,12 +135,22 @@ export default function Cadastro() {
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={s.photoContainer}>
-          <View style={s.photoCircle}>
-            <Ionicons name="camera" size={40} color={colors.textMuted} />
-          </View>
-          <Text style={s.photoText}>Adicionar Foto</Text>
-        </View>
+        {/* Foto do Pet */}
+        <TouchableOpacity style={s.photoContainer} onPress={handleFotoPress} activeOpacity={0.8}>
+          {fotoUri ? (
+            <View style={s.photoWrapper}>
+              <RNImage source={{ uri: fotoUri }} style={s.photoImage} />
+              <View style={s.photoEditOverlay}>
+                <Ionicons name="camera" size={20} color="#fff" />
+              </View>
+            </View>
+          ) : (
+            <View style={s.photoCircle}>
+              <Ionicons name="camera" size={40} color="#10b981" />
+            </View>
+          )}
+          <Text style={s.photoText}>{fotoUri ? "Trocar Foto" : "Adicionar Foto"}</Text>
+        </TouchableOpacity>
 
         <View style={s.form}>
           <View style={s.inputGroup}>
@@ -150,107 +221,50 @@ export default function Cadastro() {
 }
 
 const makeStyles = (colors: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  contentContainer: {
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 32,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  contentContainer: { padding: 24, paddingTop: 60, paddingBottom: 40 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 32 },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface,
+    justifyContent: "center", alignItems: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: colors.text,
+  title: { fontSize: 22, fontWeight: "bold", color: colors.text },
+  photoContainer: { alignItems: "center", marginBottom: 32 },
+  photoWrapper: { position: "relative", marginBottom: 12 },
+  photoImage: {
+    width: 110, height: 110, borderRadius: 55,
+    borderWidth: 3, borderColor: "#10b981",
   },
-  photoContainer: {
-    alignItems: "center",
-    marginBottom: 32,
+  photoEditOverlay: {
+    position: "absolute", bottom: 4, right: 4,
+    backgroundColor: "#10b981", width: 32, height: 32,
+    borderRadius: 16, justifyContent: "center", alignItems: "center",
+    borderWidth: 2, borderColor: colors.background,
   },
   photoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.border,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#10b981", // Usando verde da home
-    borderStyle: "dashed",
-    marginBottom: 12,
+    width: 110, height: 110, borderRadius: 55, backgroundColor: colors.surfaceSecondary,
+    justifyContent: "center", alignItems: "center",
+    borderWidth: 2, borderColor: "#10b981", borderStyle: "dashed", marginBottom: 12,
   },
-  photoText: {
-    color: "#10b981",
-    fontWeight: "600",
-    fontSize: 14,
-  },
+  photoText: { color: "#10b981", fontWeight: "600", fontSize: 14 },
   form: {
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: colors.surface, borderRadius: 24, padding: 24,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
+  inputGroup: { marginBottom: 20 },
+  row: { flexDirection: "row", justifyContent: "space-between" },
+  label: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 8 },
   input: {
-    backgroundColor: colors.inputBackground,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: "transparent",
+    backgroundColor: colors.inputBackground, borderRadius: 12, padding: 16,
+    fontSize: 16, color: colors.text, borderWidth: 1, borderColor: "transparent",
   },
   button: {
-    backgroundColor: "#10b981", // Usando verde da home
-    borderRadius: 16,
-    padding: 18,
-    alignItems: "center",
-    marginTop: 12,
-    shadowColor: "#10b981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    backgroundColor: "#10b981", borderRadius: 16, padding: 18, alignItems: "center",
+    marginTop: 12, shadowColor: "#10b981", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });

@@ -1,14 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Image, ActivityIndicator } from "react-native";
 import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
-
-const AGENDAMENTOS_MOCK = [
-  { id: "m1", horario: "09:00", tutor: "Maria Silva", pet: "Bolinha", motivo: "Consulta de Rotina", status: "concluido", origem: "interno" },
-  { id: "m2", horario: "10:30", tutor: "João Souza", pet: "Rex", motivo: "Retorno Vacina V10", status: "pendente", origem: "interno" },
-];
 
 export default function VetHome() {
   const router = useRouter();
@@ -17,6 +12,12 @@ export default function VetHome() {
   const [consultas, setConsultas] = useState<any[]>([]);
   const [agendaBadge, setAgendaBadge] = useState(0);
   const [vetName, setVetName] = useState("Doutor(a)");
+
+  // Busca de Pacientes
+  const [busca, setBusca] = useState("");
+  const [resultados, setResultados] = useState<any[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [buscaFeita, setBuscaFeita] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -31,7 +32,6 @@ export default function VetHome() {
       const user = JSON.parse(sessionStr);
       if (user.nome) setVetName(user.nome.split(" ")[0]);
 
-      // Carregar consultas registradas
       const data = await AsyncStorage.getItem("@consultas");
       if (data) {
         const all = JSON.parse(data);
@@ -39,7 +39,6 @@ export default function VetHome() {
         setConsultas(doVet.reverse());
       }
 
-      // Calcular badge da agenda (agendamentos novos de tutores)
       const agendaData = await AsyncStorage.getItem("@agenda_consultas");
       const agendaVisto = await AsyncStorage.getItem("@agenda_visto_count");
       if (agendaData) {
@@ -53,8 +52,46 @@ export default function VetHome() {
     }
   };
 
+  const handleBuscar = async () => {
+    if (!busca.trim()) return;
+    try {
+      setBuscando(true);
+      setBuscaFeita(false);
+
+      // Buscar em todos os pets cadastrados
+      const petsData = await AsyncStorage.getItem("@pets");
+      const usersData = await AsyncStorage.getItem("@users");
+      const pets = petsData ? JSON.parse(petsData) : [];
+      const users = usersData ? JSON.parse(usersData) : [];
+
+      const encontrados = pets.filter((p: any) =>
+        p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
+        p.especie?.toLowerCase().includes(busca.toLowerCase()) ||
+        p.raca?.toLowerCase().includes(busca.toLowerCase())
+      );
+
+      // Enriquecer com dados do tutor
+      const enriquecidos = encontrados.map((p: any) => {
+        const tutor = users.find((u: any) => u.id === p.userId);
+        return { ...p, tutorNome: tutor?.nome || "Tutor não encontrado", tutorTel: tutor?.telefone };
+      });
+
+      setResultados(enriquecidos);
+      setBuscaFeita(true);
+    } catch (e) {
+      Alert.alert("Erro", "Falha ao realizar busca.");
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const limparBusca = () => {
+    setBusca("");
+    setResultados([]);
+    setBuscaFeita(false);
+  };
+
   const handleAgendaPress = async () => {
-    // Marcar todos como vistos ao entrar
     const agendaData = await AsyncStorage.getItem("@agenda_consultas");
     if (agendaData) {
       const agenda = JSON.parse(agendaData);
@@ -78,21 +115,77 @@ export default function VetHome() {
         </TouchableOpacity>
       </View>
 
+      {/* Barra de Busca Funcional */}
       <View style={s.searchSection}>
         <Text style={s.sectionTitle}>Buscar Paciente</Text>
         <View style={s.searchBar}>
           <Ionicons name="search" size={20} color={colors.textMuted} />
-          <TextInput 
+          <TextInput
             style={s.searchInput}
-            placeholder="Digite o nome do paciente"
+            placeholder="Nome, espécie ou raça..."
             placeholderTextColor={colors.textMuted}
+            value={busca}
+            onChangeText={setBusca}
+            onSubmitEditing={handleBuscar}
+            returnKeyType="search"
           />
-          <TouchableOpacity style={s.searchButton}>
-            <Text style={s.searchButtonText}>Buscar</Text>
+          {busca.length > 0 && (
+            <TouchableOpacity onPress={limparBusca}>
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={s.searchButton} onPress={handleBuscar}>
+            {buscando ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={s.searchButtonText}>Buscar</Text>
+            )}
           </TouchableOpacity>
         </View>
+
+        {/* Resultados da Busca */}
+        {buscaFeita && (
+          <View style={s.resultadosContainer}>
+            {resultados.length === 0 ? (
+              <View style={s.semResultados}>
+                <Ionicons name="search" size={32} color={colors.textMuted} />
+                <Text style={s.semResultadosText}>Nenhum paciente encontrado para "{busca}"</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={s.resultadosCount}>{resultados.length} resultado(s) encontrado(s)</Text>
+                {resultados.map((pet, i) => (
+                  <View key={pet.id || i} style={s.resultadoCard}>
+                    {pet.fotoUri ? (
+                      <Image source={{ uri: pet.fotoUri }} style={s.resultadoFoto} />
+                    ) : (
+                      <View style={s.resultadoFotoPlaceholder}>
+                        <Ionicons name="paw" size={24} color="#0f766e" />
+                      </View>
+                    )}
+                    <View style={s.resultadoInfo}>
+                      <Text style={s.resultadoNome}>{pet.nome}</Text>
+                      <Text style={s.resultadoDetalhe}>{pet.especie}{pet.raca ? ` • ${pet.raca}` : ""}</Text>
+                      <View style={s.resultadoTutor}>
+                        <Ionicons name="person" size={12} color={colors.textMuted} />
+                        <Text style={s.resultadoTutorText}>{pet.tutorNome}</Text>
+                      </View>
+                    </View>
+                    {pet.idade || pet.peso ? (
+                      <View style={s.resultadoBadges}>
+                        {pet.idade ? <Text style={s.badge}>{pet.idade}a</Text> : null}
+                        {pet.peso ? <Text style={s.badge}>{pet.peso}kg</Text> : null}
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
+        )}
       </View>
 
+      {/* Grid de Ações */}
       <View style={s.actionsGrid}>
         <TouchableOpacity style={s.actionCard} onPress={() => router.push("/nova-consulta")}>
           <View style={[s.iconContainer, { backgroundColor: "#0d948820" }]}>
@@ -100,15 +193,14 @@ export default function VetHome() {
           </View>
           <Text style={s.actionTitle}>Nova Consulta</Text>
         </TouchableOpacity>
-        
-        {/* Card Agenda com Badge */}
+
         <TouchableOpacity style={s.actionCard} onPress={handleAgendaPress}>
           <View style={{ position: "relative" }}>
             <View style={[s.iconContainer, { backgroundColor: "#8b5cf620" }]}>
               <Ionicons name="calendar" size={32} color="#8b5cf6" />
             </View>
             {agendaBadge > 0 && (
-              <View style={s.badge}>
+              <View style={s.badge2}>
                 <Text style={s.badgeText}>{agendaBadge > 9 ? "9+" : agendaBadge}</Text>
               </View>
             )}
@@ -131,7 +223,7 @@ export default function VetHome() {
         </TouchableOpacity>
       </View>
 
-      <Text style={s.sectionTitle}>Pacientes Recentes</Text>
+      <Text style={s.sectionTitle}>Consultas Recentes</Text>
       {consultas.length > 0 ? (
         consultas.slice(0, 5).map((c, i) => (
           <View key={i} style={s.consultaCard}>
@@ -162,30 +254,18 @@ export default function VetHome() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("Meu Perfil", "Editar perfil do veterinário.")}>
-              <Ionicons name="person-outline" size={24} color="#0f766e" />
-              <Text style={s.sideMenuText}>Meu Perfil</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/integrantes"); }}>
-              <Ionicons name="code-slash-outline" size={24} color="#8b5cf6" />
-              <Text style={s.sideMenuText}>Desenvolvedores</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/ajustes-vet"); }}>
-              <Ionicons name="settings-outline" size={24} color="#f59e0b" />
-              <Text style={s.sideMenuText}>Configurações</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("FAQ", "Dúvidas Frequentes.")}>
-              <Ionicons name="help-circle-outline" size={24} color="#10b981" />
-              <Text style={s.sideMenuText}>FAQ</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("SAC", "Suporte para clínicas.")}>
-              <Ionicons name="chatbubbles-outline" size={24} color="#ec4899" />
-              <Text style={s.sideMenuText}>SAC</Text>
-            </TouchableOpacity>
+            {[
+              { icon: "person-outline", color: "#0f766e", label: "Meu Perfil", onPress: () => Alert.alert("Meu Perfil", "Editar perfil do veterinário.") },
+              { icon: "code-slash-outline", color: "#8b5cf6", label: "Desenvolvedores", onPress: () => { setMenuVisible(false); router.push("/integrantes"); } },
+              { icon: "settings-outline", color: "#f59e0b", label: "Configurações", onPress: () => { setMenuVisible(false); router.push("/ajustes-vet"); } },
+              { icon: "help-circle-outline", color: "#10b981", label: "FAQ", onPress: () => Alert.alert("FAQ", "Dúvidas Frequentes.") },
+              { icon: "chatbubbles-outline", color: "#ec4899", label: "SAC", onPress: () => Alert.alert("SAC", "Suporte para clínicas.") },
+            ].map((item, idx) => (
+              <TouchableOpacity key={idx} style={s.sideMenuItem} onPress={item.onPress}>
+                <Ionicons name={item.icon as any} size={24} color={item.color} />
+                <Text style={s.sideMenuText}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
               await AsyncStorage.removeItem("@session");
@@ -219,8 +299,31 @@ function makeStyles(colors: any) {
       shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
     },
     searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 16, color: colors.text, height: 40 },
-    searchButton: { backgroundColor: "#0d9488", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+    searchButton: { backgroundColor: "#0d9488", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, minWidth: 70, alignItems: "center" },
     searchButtonText: { color: "#fff", fontWeight: "bold" },
+    resultadosContainer: { marginTop: 12 },
+    resultadosCount: { fontSize: 13, color: colors.textMuted, marginBottom: 12 },
+    semResultados: { alignItems: "center", padding: 24, backgroundColor: colors.surface, borderRadius: 16 },
+    semResultadosText: { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: "center" },
+    resultadoCard: {
+      flexDirection: "row", alignItems: "center", backgroundColor: colors.surface,
+      borderRadius: 14, padding: 14, marginBottom: 10,
+      shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
+      borderLeftWidth: 3, borderLeftColor: "#0d9488",
+    },
+    resultadoFoto: { width: 50, height: 50, borderRadius: 25, marginRight: 14 },
+    resultadoFotoPlaceholder: {
+      width: 50, height: 50, borderRadius: 25, backgroundColor: "#ccfbf1",
+      justifyContent: "center", alignItems: "center", marginRight: 14,
+    },
+    resultadoInfo: { flex: 1 },
+    resultadoNome: { fontSize: 16, fontWeight: "bold", color: colors.text, marginBottom: 2 },
+    resultadoDetalhe: { fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
+    resultadoTutor: { flexDirection: "row", alignItems: "center" },
+    resultadoTutorText: { fontSize: 12, color: colors.textMuted, marginLeft: 4 },
+    resultadoBadges: { gap: 6, alignItems: "flex-end" },
+    badge: { backgroundColor: "#0d948820", color: "#0d9488", fontSize: 12, fontWeight: "bold", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
     actionsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 32 },
     actionCard: {
       backgroundColor: colors.surface, width: "47%", borderRadius: 16, padding: 20,
@@ -230,10 +333,9 @@ function makeStyles(colors: any) {
     },
     iconContainer: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", marginBottom: 12 },
     actionTitle: { fontSize: 15, fontWeight: "600", color: colors.text, textAlign: "center" },
-    badge: {
+    badge2: {
       position: "absolute", top: -4, right: -4, backgroundColor: "#ef4444",
-      borderRadius: 10, minWidth: 20, height: 20,
-      justifyContent: "center", alignItems: "center", paddingHorizontal: 4,
+      borderRadius: 10, minWidth: 20, height: 20, justifyContent: "center", alignItems: "center", paddingHorizontal: 4,
     },
     badgeText: { color: "#fff", fontSize: 11, fontWeight: "bold" },
     consultaCard: {
