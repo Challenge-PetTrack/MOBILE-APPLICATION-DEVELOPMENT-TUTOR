@@ -6,7 +6,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function AgendarConsulta() {
   const router = useRouter();
@@ -94,7 +94,7 @@ export default function AgendarConsulta() {
           <View style={s.emptyPets}>
             <Ionicons name="paw-outline" size={32} color={colors.textMuted} />
             <Text style={s.emptyPetsText}>Cadastre um pet primeiro</Text>
-            <TouchableOpacity onPress={() => router.push("/cadastro")} style={s.linkButton}>
+            <TouchableOpacity onPress={() => router.push("/tutor/cadastro-pet")} style={s.linkButton}>
               <Text style={s.linkButtonText}>Ir para Cadastro</Text>
             </TouchableOpacity>
           </View>

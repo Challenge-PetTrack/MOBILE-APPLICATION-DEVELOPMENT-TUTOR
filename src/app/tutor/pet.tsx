@@ -3,7 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -216,7 +216,7 @@ export default function PetScreen() {
           <Text style={s.petName}>{item.nome}</Text>
         </View>
         <View style={{flexDirection: 'row', gap: 8}}>
-          <TouchableOpacity onPress={() => router.push({ pathname: "/editar-pet", params: { id: item.id } })} style={s.editButton}>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/tutor/editar-pet", params: { id: item.id } })} style={s.editButton}>
             <Ionicons name="pencil-outline" size={20} color="#10b981" />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => removePet(item.id)} style={s.deleteButton}>
@@ -286,7 +286,7 @@ export default function PetScreen() {
           <Ionicons name="sad-outline" size={64} color={colors.textMuted} />
           <Text style={s.emptyTitle}>Nenhum pet cadastrado</Text>
           <Text style={s.emptySubtitle}>Você ainda não possui nenhum pet na sua lista.</Text>
-          <TouchableOpacity style={s.addButton} onPress={() => router.push("/cadastro")}>
+          <TouchableOpacity style={s.addButton} onPress={() => router.push("/tutor/cadastro-pet")}>
             <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
             <Text style={s.addButtonText}>Cadastrar um Pet</Text>
           </TouchableOpacity>

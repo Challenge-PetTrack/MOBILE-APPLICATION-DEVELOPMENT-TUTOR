@@ -3,7 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 const CATALOGO_LEMBRETES = [
   { id: "antipulgas", nome: "Antipulgas e Carrapatos", icone: "bug", intervaloDias: 30, color: "#ec4899" },
@@ -150,7 +150,7 @@ export default function MedicamentosScreen() {
       <Ionicons name="paw-outline" size={64} color={colors.textMuted} />
       <Text style={s.emptyTitle}>Nenhum pet encontrado</Text>
       <Text style={s.emptySubtitle}>Cadastre um pet primeiro para organizar os medicamentos.</Text>
-      <TouchableOpacity style={s.addButton} onPress={() => router.push("/cadastro")}>
+      <TouchableOpacity style={s.addButton} onPress={() => router.push("/tutor/cadastro-pet")}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
         <Text style={s.addButtonText}>Cadastrar um Pet</Text>
       </TouchableOpacity>

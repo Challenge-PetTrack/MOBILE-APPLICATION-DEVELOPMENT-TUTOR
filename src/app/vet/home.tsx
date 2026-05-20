@@ -3,7 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function VetHome() {
   const router = useRouter();
@@ -117,7 +117,7 @@ export default function VetHome() {
       await AsyncStorage.setItem("@agenda_visto_count", agenda.length.toString());
     }
     setAgendaBadge(0);
-    router.push("/agenda-vet");
+    router.push("/vet/agenda");
   };
 
   const s = makeStyles(colors);
@@ -207,11 +207,11 @@ export default function VetHome() {
       {/* Dashboard Financeiro (Clicável) */}
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <Text style={[s.sectionTitle, { marginBottom: 0 }]}>Visão Geral do Mês</Text>
-        <TouchableOpacity onPress={() => router.push("/financeiro-vet")}>
+        <TouchableOpacity onPress={() => router.push("/vet/financeiro")}>
           <Text style={{ color: "#0d9488", fontWeight: "600", fontSize: 14 }}>Ver Detalhes</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={s.dashboardContainer} activeOpacity={0.8} onPress={() => router.push("/financeiro-vet")}>
+      <TouchableOpacity style={s.dashboardContainer} activeOpacity={0.8} onPress={() => router.push("/vet/financeiro")}>
         <View style={s.dashCard}>
           <View style={s.dashIconBox}>
             <Ionicons name="medical" size={24} color="#0d9488" />
@@ -231,7 +231,7 @@ export default function VetHome() {
 
       {/* Grid de Ações */}
       <View style={s.actionsGrid}>
-        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/nova-consulta")}>
+        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/vet/nova-consulta")}>
           <View style={[s.iconContainer, { backgroundColor: "#0d948820" }]}>
             <Ionicons name="document-text" size={32} color="#0d9488" />
           </View>
@@ -252,14 +252,14 @@ export default function VetHome() {
           <Text style={s.actionTitle}>Agenda</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/tutores-vet")}>
+        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/vet/tutores")}>
           <View style={[s.iconContainer, { backgroundColor: "#f59e0b20" }]}>
             <Ionicons name="people" size={32} color="#f59e0b" />
           </View>
           <Text style={s.actionTitle}>Tutores</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/financeiro-vet")}>
+        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/vet/financeiro")}>
           <View style={[s.iconContainer, { backgroundColor: "#10b98120" }]}>
             <Ionicons name="wallet" size={32} color="#10b981" />
           </View>
@@ -301,10 +301,10 @@ export default function VetHome() {
 
             {[
               { icon: "person-outline", color: "#0f766e", label: "Meu Perfil", onPress: () => Alert.alert("Meu Perfil", "Editar perfil do veterinário.") },
-              { icon: "code-slash-outline", color: "#8b5cf6", label: "Desenvolvedores", onPress: () => { setMenuVisible(false); router.push("/integrantes"); } },
-              { icon: "settings-outline", color: "#f59e0b", label: "Configurações", onPress: () => { setMenuVisible(false); router.push("/ajustes-vet"); } },
-              { icon: "help-circle-outline", color: "#10b981", label: "FAQ", onPress: () => Alert.alert("FAQ", "Dúvidas Frequentes.") },
-              { icon: "chatbubbles-outline", color: "#ec4899", label: "SAC", onPress: () => Alert.alert("SAC", "Suporte para clínicas.") },
+              { icon: "code-slash-outline", color: "#8b5cf6", label: "Desenvolvedores", onPress: () => { setMenuVisible(false); router.push("/tutor/integrantes"); } },
+              { icon: "settings-outline", color: "#f59e0b", label: "Configurações", onPress: () => { setMenuVisible(false); router.push("/vet/ajustes"); } },
+              { icon: "help-circle-outline", color: "#10b981", label: "FAQ", onPress: () => { setMenuVisible(false); router.push("/vet/faq"); } },
+              { icon: "chatbubbles-outline", color: "#ec4899", label: "SAC", onPress: () => { setMenuVisible(false); router.push("/vet/sac"); } },
             ].map((item, idx) => (
               <TouchableOpacity key={idx} style={s.sideMenuItem} onPress={item.onPress}>
                 <Ionicons name={item.icon as any} size={24} color={item.color} />
@@ -314,7 +314,7 @@ export default function VetHome() {
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
               await AsyncStorage.removeItem("@session");
-              router.replace("/");
+              router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />
               <Text style={[s.sideMenuText, { color: "#ef4444" }]}>Sair</Text>

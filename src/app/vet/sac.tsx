@@ -2,9 +2,9 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert,
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
-export default function SAC() {
+export default function VetSAC() {
   const router = useRouter();
   const { colors } = useTheme();
   const s = makeStyles(colors);
@@ -18,17 +18,15 @@ export default function SAC() {
       return;
     }
 
-    // Aqui poderia integrar com uma API real. 
-    // Para simplificar, abre o email do usuário ou mostra um alerta.
     Alert.alert(
       "Mensagem Enviada!",
-      "Sua solicitação foi enviada para nossa equipe de suporte. Responderemos em breve.",
+      "Sua solicitação foi enviada para nossa equipe de suporte para profissionais parceiros. Responderemos em breve.",
       [{ text: "OK", onPress: () => router.back() }]
     );
   };
 
   const abrirWhatsAppSuporte = () => {
-    Linking.openURL("https://wa.me/5511999999999?text=Olá, preciso de suporte no app PetTrack.");
+    Linking.openURL("https://wa.me/5511962108253?text=Olá, sou um veterinário parceiro e preciso de suporte no app PetTrack.");
   };
 
   return (
@@ -37,16 +35,16 @@ export default function SAC() {
         <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={s.title}>Atendimento (SAC)</Text>
+        <Text style={s.title}>Suporte Profissional</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView style={s.content} showsVerticalScrollIndicator={false}>
         <View style={s.contactCard}>
-          <Ionicons name="headset" size={40} color="#10b981" />
-          <Text style={s.contactTitle}>Como podemos ajudar?</Text>
+          <Ionicons name="medical" size={40} color="#0d9488" />
+          <Text style={s.contactTitle}>Suporte Exclusivo (Vet)</Text>
           <Text style={s.contactSubtitle}>
-            Envie sua dúvida, sugestão ou reporte um problema.
+            Problemas com a agenda, faturamento ou sugestões de novas features.
           </Text>
         </View>
 
@@ -54,7 +52,7 @@ export default function SAC() {
           <Text style={s.label}>Assunto</Text>
           <TextInput
             style={s.input}
-            placeholder="Ex: Problema com agendamento"
+            placeholder="Ex: Falha ao gerar receita PDF"
             placeholderTextColor={colors.textMuted}
             value={assunto}
             onChangeText={setAssunto}
@@ -63,7 +61,7 @@ export default function SAC() {
           <Text style={s.label}>Sua Mensagem</Text>
           <TextInput
             style={[s.input, s.textArea]}
-            placeholder="Descreva o que aconteceu..."
+            placeholder="Descreva a sua solicitação em detalhes..."
             placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={5}
@@ -128,7 +126,7 @@ function makeStyles(colors: any) {
     },
     textArea: { height: 120 },
     submitButton: {
-      backgroundColor: "#10b981", borderRadius: 12, paddingVertical: 16, alignItems: "center",
+      backgroundColor: "#0d9488", borderRadius: 12, paddingVertical: 16, alignItems: "center",
     },
     submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
     dividerContainer: { flexDirection: "row", alignItems: "center", marginVertical: 24 },

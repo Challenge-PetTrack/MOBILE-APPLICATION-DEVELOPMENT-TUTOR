@@ -3,7 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 // Lista fixa de vacinas (Catálogo)
 const CATALOGO_VACINAS = [
@@ -193,7 +193,7 @@ export default function VacinasScreen() {
       <Ionicons name="paw-outline" size={64} color={colors.textMuted} />
       <Text style={s.emptyTitle}>Nenhum pet encontrado</Text>
       <Text style={s.emptySubtitle}>Cadastre um pet primeiro para gerenciar suas vacinas.</Text>
-      <TouchableOpacity style={s.addButton} onPress={() => router.push("/cadastro")}>
+      <TouchableOpacity style={s.addButton} onPress={() => router.push("/tutor/cadastro-pet")}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
         <Text style={s.addButtonText}>Cadastrar um Pet</Text>
       </TouchableOpacity>

@@ -3,7 +3,7 @@ import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function AjustesTutor() {
   const router = useRouter();
@@ -125,7 +125,7 @@ export default function AjustesTutor() {
 
         <Text style={s.sectionTitle}>Suporte e Informações</Text>
         <View style={s.card}>
-          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/faq")}>
+          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/tutor/faq")}>
             <View style={s.rowLeft}>
               <Ionicons name="help-circle" size={24} color="#10b981" />
               <Text style={[s.rowText, { marginLeft: 16 }]}>Perguntas Frequentes (FAQ)</Text>
@@ -133,7 +133,7 @@ export default function AjustesTutor() {
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
           <View style={s.divider} />
-          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/sac")}>
+          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/tutor/sac")}>
             <View style={s.rowLeft}>
               <Ionicons name="chatbubbles" size={24} color="#10b981" />
               <Text style={[s.rowText, { marginLeft: 16 }]}>Fale Conosco (SAC)</Text>

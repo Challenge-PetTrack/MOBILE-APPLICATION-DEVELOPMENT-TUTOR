@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function CadastroUsuarioScreen() {
   const router = useRouter();
@@ -47,7 +47,7 @@ export default function CadastroUsuarioScreen() {
       await AsyncStorage.setItem("@users", JSON.stringify(users));
       
       Alert.alert("Sucesso", "Conta criada com sucesso!", [
-        { text: "OK", onPress: () => router.replace("/") }
+        { text: "OK", onPress: () => router.replace("/auth/login") }
       ]);
     } catch (e) {
       Alert.alert("Erro", "Não foi possível criar a conta.");

@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function TutorHome() {
   const router = useRouter();
@@ -85,34 +85,34 @@ export default function TutorHome() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/ajustes-tutor"); }}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/tutor/ajustes"); }}>
               <Ionicons name="person-outline" size={24} color="#4f46e5" />
               <Text style={s.sideMenuText}>Meu Perfil</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/integrantes"); }}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/tutor/integrantes"); }}>
               <Ionicons name="code-slash-outline" size={24} color="#8b5cf6" />
               <Text style={s.sideMenuText}>Desenvolvedores</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/ajustes-tutor"); }}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/tutor/ajustes"); }}>
               <Ionicons name="settings-outline" size={24} color="#f59e0b" />
               <Text style={s.sideMenuText}>Configurações</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/faq"); }}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/tutor/faq"); }}>
               <Ionicons name="help-circle-outline" size={24} color="#10b981" />
               <Text style={s.sideMenuText}>FAQ</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/sac"); }}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/tutor/sac"); }}>
               <Ionicons name="chatbubbles-outline" size={24} color="#ec4899" />
               <Text style={s.sideMenuText}>SAC</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
               await AsyncStorage.removeItem("@session");
-              router.replace("/");
+              router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />
               <Text style={[s.sideMenuText, { color: "#ef4444" }]}>Sair</Text>

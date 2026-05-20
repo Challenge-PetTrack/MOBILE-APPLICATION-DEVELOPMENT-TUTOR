@@ -50,13 +50,13 @@ export default function Onboarding() {
     } else {
       // Concluir onboarding
       await AsyncStorage.setItem("@onboarding_done", "true");
-      router.replace("/");
+      router.replace("/auth/login");
     }
   };
 
   const handleSkip = async () => {
     await AsyncStorage.setItem("@onboarding_done", "true");
-    router.replace("/");
+    router.replace("/auth/login");
   };
 
   const renderItem = ({ item }: { item: any }) => {
