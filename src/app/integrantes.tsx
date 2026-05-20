@@ -4,10 +4,10 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
 const integrantes = [
-  { id: "1", nome: "Gabriel Sbrana", rm: "RM 565849", foto: require("../../images/integrantes/gabriel.jpeg"), descricao: "Olá, sou o Gabriel. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP." },
-  { id: "2", nome: "Moisés Waidemann",  rm: "RM 563719", foto: require("../../images/integrantes/moises.jpeg"), descricao: "Olá, sou o Moisés. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP."},
-  { id: "3", nome: "Richard Freitas", rm: "RM 566127", foto: require("../../images/integrantes/richard.jpeg"), descricao: "Olá, sou o Richard. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP." },
-  { id: "4", nome: "Thiago Rodrigues",  rm: "RM 563765", foto: require("../../images/integrantes/thiago.jpeg"), descricao: "Olá, sou o Thiago. Tenho 21 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP."},
+  { id: "1", nome: "Gabriel Sbrana", rm: "RM - 565849", foto: require("../../images/integrantes/gabriel.jpeg"), descricao: "Olá, sou o Gabriel. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP." },
+  { id: "2", nome: "Moisés Waidemann",  rm: "RM - 563719", foto: require("../../images/integrantes/moises.jpeg"), descricao: "Olá, sou o Moisés. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP."},
+  { id: "3", nome: "Richard Freitas", rm: "RM - 566127", foto: require("../../images/integrantes/richard.jpeg"), descricao: "Olá, sou o Richard. Tenho 19 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP." },
+  { id: "4", nome: "Thiago Rodrigues",  rm: "RM - 563765", foto: require("../../images/integrantes/thiago.jpeg"), descricao: "Olá, sou o Thiago. Tenho 21 anos, sou estudante de Análise e Desenvolvimento de Sistemas na FIAP."},
 ];
 
 export default function Integrantes() {
