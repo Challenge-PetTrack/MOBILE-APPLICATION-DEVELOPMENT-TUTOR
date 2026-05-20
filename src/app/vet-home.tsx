@@ -12,6 +12,10 @@ export default function VetHome() {
   const [consultas, setConsultas] = useState<any[]>([]);
   const [agendaBadge, setAgendaBadge] = useState(0);
   const [vetName, setVetName] = useState("Doutor(a)");
+  
+  // Dashboard Metrics
+  const [consultasMes, setConsultasMes] = useState(0);
+  const [faturamento, setFaturamento] = useState(0);
 
   // Busca de Pacientes
   const [busca, setBusca] = useState("");
@@ -32,11 +36,26 @@ export default function VetHome() {
       const user = JSON.parse(sessionStr);
       if (user.nome) setVetName(user.nome.split(" ")[0]);
 
+      const clinicaStr = await AsyncStorage.getItem("@clinica_dados");
+      const valorConsulta = clinicaStr ? parseFloat(JSON.parse(clinicaStr).valorConsulta || "150") : 150;
+
       const data = await AsyncStorage.getItem("@consultas");
       if (data) {
         const all = JSON.parse(data);
         const doVet = all.filter((c: any) => c.vetId === user.id);
         setConsultas(doVet.reverse());
+
+        // Calcular métricas do mês atual
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        const consultasEsteMes = doVet.filter((c: any) => {
+          const d = new Date(c.data);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+
+        setConsultasMes(consultasEsteMes.length);
+        setFaturamento(consultasEsteMes.length * valorConsulta);
       }
 
       const agendaData = await AsyncStorage.getItem("@agenda_consultas");
@@ -185,6 +204,31 @@ export default function VetHome() {
         )}
       </View>
 
+      {/* Dashboard Financeiro (Clicável) */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <Text style={[s.sectionTitle, { marginBottom: 0 }]}>Visão Geral do Mês</Text>
+        <TouchableOpacity onPress={() => router.push("/financeiro-vet")}>
+          <Text style={{ color: "#0d9488", fontWeight: "600", fontSize: 14 }}>Ver Detalhes</Text>
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity style={s.dashboardContainer} activeOpacity={0.8} onPress={() => router.push("/financeiro-vet")}>
+        <View style={s.dashCard}>
+          <View style={s.dashIconBox}>
+            <Ionicons name="medical" size={24} color="#0d9488" />
+          </View>
+          <Text style={s.dashValue}>{consultasMes}</Text>
+          <Text style={s.dashLabel}>Consultas Realizadas</Text>
+        </View>
+        
+        <View style={s.dashCard}>
+          <View style={[s.dashIconBox, { backgroundColor: "#10b98120" }]}>
+            <Ionicons name="cash" size={24} color="#10b981" />
+          </View>
+          <Text style={[s.dashValue, { color: "#10b981" }]}>R$ {faturamento.toLocaleString("pt-BR", {minimumFractionDigits: 2})}</Text>
+          <Text style={s.dashLabel}>Faturamento Estimado</Text>
+        </View>
+      </TouchableOpacity>
+
       {/* Grid de Ações */}
       <View style={s.actionsGrid}>
         <TouchableOpacity style={s.actionCard} onPress={() => router.push("/nova-consulta")}>
@@ -215,12 +259,13 @@ export default function VetHome() {
           <Text style={s.actionTitle}>Tutores</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/ajustes-vet")}>
-          <View style={[s.iconContainer, { backgroundColor: "#3b82f620" }]}>
-            <Ionicons name="settings" size={32} color="#3b82f6" />
+        <TouchableOpacity style={s.actionCard} onPress={() => router.push("/financeiro-vet")}>
+          <View style={[s.iconContainer, { backgroundColor: "#10b98120" }]}>
+            <Ionicons name="wallet" size={32} color="#10b981" />
           </View>
-          <Text style={s.actionTitle}>Ajustes</Text>
+          <Text style={s.actionTitle}>Financeiro</Text>
         </TouchableOpacity>
+
       </View>
 
       <Text style={s.sectionTitle}>Consultas Recentes</Text>
@@ -324,6 +369,15 @@ function makeStyles(colors: any) {
     resultadoTutorText: { fontSize: 12, color: colors.textMuted, marginLeft: 4 },
     resultadoBadges: { gap: 6, alignItems: "flex-end" },
     badge: { backgroundColor: "#0d948820", color: "#0d9488", fontSize: 12, fontWeight: "bold", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+    dashboardContainer: { flexDirection: "row", justifyContent: "space-between", marginBottom: 32 },
+    dashCard: {
+      backgroundColor: colors.surface, flex: 1, borderRadius: 16, padding: 16,
+      marginHorizontal: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    },
+    dashIconBox: { backgroundColor: "#ccfbf1", width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 12 },
+    dashValue: { fontSize: 24, fontWeight: "bold", color: colors.text, marginBottom: 4 },
+    dashLabel: { fontSize: 12, color: colors.textSecondary },
     actionsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 32 },
     actionCard: {
       backgroundColor: colors.surface, width: "47%", borderRadius: 16, padding: 20,

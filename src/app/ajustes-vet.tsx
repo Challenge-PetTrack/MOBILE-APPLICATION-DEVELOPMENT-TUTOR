@@ -21,6 +21,7 @@ export default function AjustesVet() {
   const [modalClinica, setModalClinica] = useState(false);
   const [nomeClinica, setNomeClinica] = useState("");
   const [enderecoClinica, setEnderecoClinica] = useState("");
+  const [valorConsulta, setValorConsulta] = useState("150");
 
   useFocusEffect(
     useCallback(() => {
@@ -40,6 +41,7 @@ export default function AjustesVet() {
       const clinica = JSON.parse(clinicaData);
       setNomeClinica(clinica.nome || "");
       setEnderecoClinica(clinica.endereco || "");
+      setValorConsulta(clinica.valorConsulta || "150");
     }
     const notif = await AsyncStorage.getItem("@settings_notificacoes");
     if (notif !== null) setNotificacoes(notif === "true");
@@ -74,7 +76,11 @@ export default function AjustesVet() {
 
   const salvarClinica = async () => {
     try {
-      await AsyncStorage.setItem("@clinica_dados", JSON.stringify({ nome: nomeClinica, endereco: enderecoClinica }));
+      await AsyncStorage.setItem("@clinica_dados", JSON.stringify({ 
+        nome: nomeClinica, 
+        endereco: enderecoClinica,
+        valorConsulta: valorConsulta
+      }));
       setModalClinica(false);
       Alert.alert("Sucesso", "Dados da clínica atualizados!");
     } catch (e) {
@@ -119,7 +125,7 @@ export default function AjustesVet() {
               <Ionicons name="business" size={24} color="#3b82f6" />
               <View style={{ marginLeft: 16 }}>
                 <Text style={s.rowText}>Dados da Clínica</Text>
-                {nomeClinica && <Text style={s.rowSubText}>{nomeClinica}</Text>}
+                {nomeClinica && <Text style={s.rowSubText}>{nomeClinica} • Consulta: R$ {valorConsulta}</Text>}
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
@@ -219,6 +225,8 @@ export default function AjustesVet() {
             <TextInput style={s.modalInput} value={nomeClinica} onChangeText={setNomeClinica} placeholderTextColor={colors.textMuted} placeholder="Ex: Clínica VetCare" />
             <Text style={s.modalLabel}>Endereço</Text>
             <TextInput style={s.modalInput} value={enderecoClinica} onChangeText={setEnderecoClinica} placeholderTextColor={colors.textMuted} placeholder="Rua, número, cidade" />
+            <Text style={s.modalLabel}>Valor Padrão da Consulta (R$)</Text>
+            <TextInput style={s.modalInput} value={valorConsulta} onChangeText={setValorConsulta} placeholderTextColor={colors.textMuted} placeholder="Ex: 150" keyboardType="numeric" />
             <View style={s.modalButtons}>
               <TouchableOpacity style={s.modalCancelBtn} onPress={() => setModalClinica(false)}>
                 <Text style={s.modalCancelText}>Cancelar</Text>

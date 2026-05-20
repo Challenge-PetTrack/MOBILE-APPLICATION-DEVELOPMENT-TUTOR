@@ -25,7 +25,7 @@ export default function TutorHome() {
 
   const menuItems = [
     { title: "Meu Pet", icon: "paw", route: "/pet", color: "#4f46e5" },
-    { title: "Cadastro", icon: "add-circle", route: "/cadastro", color: "#10b981" },
+    { title: "Financeiro", icon: "wallet", route: "/financeiro-tutor", color: "#10b981" },
     { title: "Score", icon: "stats-chart", route: "/score", color: "#f59e0b" },
     { title: "Vacinas", icon: "medkit", route: "/vacinas", color: "#ef4444" },
     { title: "Medicamentos", icon: "medical", route: "/medicamentos", color: "#ec4899" },

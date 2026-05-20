@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import LottieView from "lottie-react-native";
 
 export default function NovaConsulta() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function NovaConsulta() {
   const [tutorNome, setTutorNome] = useState("");
   const [diagnostico, setDiagnostico] = useState("");
   const [prescricao, setPrescricao] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSalvar = async () => {
     if (!petNome.trim() || !diagnostico.trim()) {
@@ -45,13 +47,10 @@ export default function NovaConsulta() {
 
       await AsyncStorage.setItem("@consultas", JSON.stringify(consultas));
 
-      Alert.alert(
-        "Sucesso!",
-        "Consulta registrada com sucesso.",
-        [
-          { text: "OK", onPress: () => router.back() }
-        ]
-      );
+      setShowSuccess(true);
+      setTimeout(() => {
+        router.back();
+      }, 2500);
     } catch (error) {
       console.error(error);
       Alert.alert("Erro", "Falha ao salvar consulta.");
@@ -126,6 +125,18 @@ export default function NovaConsulta() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {showSuccess && (
+        <View style={StyleSheet.absoluteFillObject}>
+          <View style={s.successOverlay} />
+          <LottieView
+            source={{ uri: "https://lottie.host/e2d091db-a3eb-4601-bd08-9df81bdf9fc6/A2x5uKofgK.json" }}
+            autoPlay
+            loop={false}
+            style={s.lottieAnim}
+          />
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -212,5 +223,15 @@ const makeStyles = (colors: any) => StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+  },
+  lottieAnim: {
+    width: "100%",
+    height: "100%",
+    position: "absolute",
+    zIndex: 1000,
   },
 });

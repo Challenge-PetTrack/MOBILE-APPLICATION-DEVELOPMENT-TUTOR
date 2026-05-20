@@ -7,6 +7,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import * as ImagePicker from "expo-image-picker";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 // Agendamentos mock para dias variados
 const AGENDAMENTOS_MOCK = [
@@ -51,6 +54,8 @@ export default function AgendaVet() {
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<any>(null);
   const [novoStatus, setNovoStatus] = useState("");
   const [observacaoVet, setObservacaoVet] = useState("");
+  const [anexos, setAnexos] = useState<string[]>([]);
+  const [vetInfo, setVetInfo] = useState<any>({});
 
   // Semana exibida: 7 dias a partir de 3 dias atrás
   const semana = Array.from({ length: 7 }, (_, i) => addDays(hoje, i - 2));
@@ -63,6 +68,10 @@ export default function AgendaVet() {
 
   const carregarDia = async (dia: Date) => {
     try {
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (sessionStr) {
+        setVetInfo(JSON.parse(sessionStr));
+      }
       const data = await AsyncStorage.getItem("@agenda_consultas");
       const doTutor = data ? JSON.parse(data) : [];
 
@@ -101,10 +110,20 @@ export default function AgendaVet() {
     }
   };
 
-  const abrirDetalhe = (agendamento: any) => {
+  const abrirDetalhe = async (agendamento: any) => {
     setAgendamentoSelecionado(agendamento);
     setNovoStatus(agendamento.status);
     setObservacaoVet(agendamento.observacaoVet || "");
+    
+    // Load attachments
+    try {
+      const anexosData = await AsyncStorage.getItem(`@anexos_consulta_${agendamento.id}`);
+      if (anexosData) setAnexos(JSON.parse(anexosData));
+      else setAnexos([]);
+    } catch (e) {
+      setAnexos([]);
+    }
+    
     setDetalheVisible(true);
   };
 
@@ -121,6 +140,7 @@ export default function AgendaVet() {
           if (idx !== -1) {
             agenda[idx] = { ...agenda[idx], status: novoStatus, observacaoVet };
             await AsyncStorage.setItem("@agenda_consultas", JSON.stringify(agenda));
+            await AsyncStorage.setItem(`@anexos_consulta_${agendamentoSelecionado.id}`, JSON.stringify(anexos));
           }
         }
       }
@@ -130,6 +150,80 @@ export default function AgendaVet() {
       Alert.alert("Salvo!", "Agendamento atualizado com sucesso.");
     } catch (e) {
       Alert.alert("Erro", "Não foi possível salvar.");
+    }
+  };
+
+  const pickAnexo = async () => {
+    if (anexos.length >= 3) {
+      Alert.alert("Limite", "Máximo de 3 anexos por consulta.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAnexos([...anexos, result.assets[0].uri]);
+    }
+  };
+
+  const removerAnexo = (index: number) => {
+    const novaLista = [...anexos];
+    novaLista.splice(index, 1);
+    setAnexos(novaLista);
+  };
+
+  const gerarReceita = async () => {
+    if (!agendamentoSelecionado) return;
+    try {
+      const html = `
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #1f2937; }
+              .header { text-align: center; border-bottom: 2px solid #8b5cf6; padding-bottom: 20px; margin-bottom: 30px; }
+              .title { color: #8b5cf6; font-size: 28px; font-weight: bold; margin: 0; }
+              .subtitle { font-size: 16px; margin-top: 5px; color: #4b5563; }
+              .info-box { background-color: #f3f4f6; padding: 15px; border-radius: 10px; margin-bottom: 30px; }
+              .info-row { margin-bottom: 5px; font-size: 14px; }
+              .label { font-weight: bold; }
+              .content { min-height: 400px; }
+              .presc-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;}
+              .signature { margin-top: 50px; text-align: center; }
+              .line { border-top: 1px solid #1f2937; width: 250px; margin: 0 auto 10px auto; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 class="title">Receituário Veterinário</h1>
+              <p class="subtitle">Clínica PetTrack</p>
+            </div>
+            
+            <div class="info-box">
+              <div class="info-row"><span class="label">Paciente:</span> ${agendamentoSelecionado.pet}</div>
+              <div class="info-row"><span class="label">Tutor:</span> ${agendamentoSelecionado.tutor}</div>
+              <div class="info-row"><span class="label">Data:</span> ${formatarDataLonga(diaSelecionado)}</div>
+            </div>
+            
+            <div class="content">
+              <div class="presc-title">Prescrição e Recomendações:</div>
+              <p style="white-space: pre-wrap; font-size: 15px; line-height: 1.6;">${observacaoVet || "Sem prescrições no momento."}</p>
+            </div>
+            
+            <div class="signature">
+              <div class="line"></div>
+              <div>${vetInfo?.nome || "Médico(a) Veterinário(a)"}</div>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">CRMV: ${vetInfo?.crmv || "Não informado"}</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Compartilhar Receita' });
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -274,17 +368,43 @@ export default function AgendaVet() {
                   ))}
                 </View>
 
-                {/* Observação do Veterinário */}
-                <Text style={s.sectionLabel}>Observação / Diagnóstico</Text>
+                {/* Observação / Diagnóstico */}
+                <Text style={s.sectionLabel}>Prescrição / Observação</Text>
                 <TextInput
                   style={s.obsInput}
-                  placeholder="Escreva sua observação ou diagnóstico aqui..."
+                  placeholder="Escreva sua prescrição ou diagnóstico aqui..."
                   placeholderTextColor={colors.textMuted}
                   multiline
                   numberOfLines={4}
                   value={observacaoVet}
                   onChangeText={setObservacaoVet}
                 />
+
+                {/* Anexos Fotográficos */}
+                <View style={s.anexoHeader}>
+                  <Text style={[s.sectionLabel, { marginBottom: 0 }]}>Anexos ({anexos.length}/3)</Text>
+                  <TouchableOpacity onPress={pickAnexo}>
+                    <Ionicons name="camera" size={24} color="#8b5cf6" />
+                  </TouchableOpacity>
+                </View>
+                
+                {anexos.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.anexosContainer}>
+                    {anexos.map((uri, idx) => (
+                      <View key={idx} style={s.anexoItem}>
+                        <Image source={{ uri }} style={s.anexoImg} />
+                        <TouchableOpacity style={s.anexoRemove} onPress={() => removerAnexo(idx)}>
+                          <Ionicons name="close" size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+
+                <TouchableOpacity style={s.receitaBtn} onPress={gerarReceita}>
+                  <Ionicons name="document-text" size={20} color="#fff" />
+                  <Text style={s.receitaBtnText}>Gerar Receita em PDF</Text>
+                </TouchableOpacity>
 
                 <View style={s.modalActions}>
                   <TouchableOpacity style={s.cancelarBtn} onPress={() => setDetalheVisible(false)}>
@@ -392,10 +512,17 @@ function makeStyles(colors: any) {
       color: colors.text, borderWidth: 1, borderColor: colors.border,
       height: 110, textAlignVertical: "top", marginBottom: 24,
     },
-    modalActions: { flexDirection: "row", gap: 12 },
+    modalActions: { flexDirection: "row", gap: 12, marginTop: 16 },
     cancelarBtn: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: colors.surfaceSecondary, alignItems: "center" },
     cancelarText: { color: colors.text, fontWeight: "600", fontSize: 16 },
     salvarBtn: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: "#8b5cf6", alignItems: "center" },
     salvarText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+    anexoHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+    anexosContainer: { flexDirection: "row", marginBottom: 24 },
+    anexoItem: { position: "relative", marginRight: 12 },
+    anexoImg: { width: 80, height: 80, borderRadius: 12 },
+    anexoRemove: { position: "absolute", top: -6, right: -6, backgroundColor: "#ef4444", width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+    receitaBtn: { flexDirection: "row", backgroundColor: "#0f766e", padding: 16, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+    receitaBtnText: { color: "#fff", fontWeight: "bold", fontSize: 16, marginLeft: 8 },
   });
 }

@@ -5,6 +5,8 @@ import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 type Pet = {
   id: string;
@@ -36,6 +38,10 @@ export default function PetScreen() {
   const [vacinasRecord, setVacinasRecord] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [fichaPet, setFichaPet] = useState<Pet | null>(null);
+  const [activeTab, setActiveTab] = useState<"ficha" | "diario">("ficha");
+  const [diario, setDiario] = useState<any[]>([]);
+  const [nota, setNota] = useState("");
+  const [fotoNota, setFotoNota] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,12 +85,110 @@ export default function PetScreen() {
     }
   };
 
-  const abrirFicha = (pet: Pet) => {
+  const abrirFicha = async (pet: Pet) => {
     setFichaPet(pet);
+    setActiveTab("ficha");
+    // Load diary
+    try {
+      const stored = await AsyncStorage.getItem(`@diario_${pet.id}`);
+      if (stored) setDiario(JSON.parse(stored));
+      else setDiario([]);
+    } catch (e) {}
   };
 
   const fecharFicha = () => {
     setFichaPet(null);
+    setNota("");
+    setFotoNota(null);
+  };
+
+  const gerarRG = async (pet: Pet) => {
+    try {
+      const vacinasTomadas = getVacinasTomadas(pet.id);
+      const html = `
+        <html>
+          <head>
+            <style>
+              body { font-family: 'Helvetica', sans-serif; background-color: #f3f4f6; padding: 40px; display: flex; justify-content: center; }
+              .card { background-color: white; border-radius: 20px; padding: 30px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 2px solid #4f46e5; }
+              .header { text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 20px; }
+              .title { color: #4f46e5; font-size: 24px; font-weight: bold; margin: 0; }
+              .subtitle { color: #6b7280; font-size: 14px; margin-top: 5px; }
+              .photo-container { display: flex; justify-content: center; margin-bottom: 20px; }
+              .photo { width: 120px; height: 120px; border-radius: 60px; object-fit: cover; border: 4px solid #10b981; }
+              .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 16px; }
+              .label { color: #6b7280; font-weight: bold; }
+              .value { color: #1f2937; font-weight: bold; }
+              .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #9ca3af; }
+              .vacina-badge { display: inline-block; background-color: #d1fae5; color: #065f46; padding: 4px 8px; border-radius: 12px; font-size: 12px; margin: 4px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="header">
+                <h1 class="title">Registro Geral do Pet</h1>
+                <p class="subtitle">República Federativa do PetTrack</p>
+              </div>
+              <div class="photo-container">
+                ${pet.fotoUri ? `<img src="${pet.fotoUri}" class="photo" />` : `<div class="photo" style="background-color: #e5e7eb; display:flex; align-items:center; justify-content:center; color:#9ca3af;">Sem Foto</div>`}
+              </div>
+              <div class="info-row"><span class="label">Nome:</span><span class="value">${pet.nome}</span></div>
+              <div class="info-row"><span class="label">Espécie:</span><span class="value">${pet.especie}</span></div>
+              <div class="info-row"><span class="label">Raça:</span><span class="value">${pet.raca || 'N/A'}</span></div>
+              <div class="info-row"><span class="label">Idade:</span><span class="value">${pet.idade ? pet.idade + ' anos' : 'N/A'}</span></div>
+              <div class="info-row"><span class="label">Peso:</span><span class="value">${pet.peso ? pet.peso + ' kg' : 'N/A'}</span></div>
+              <div class="info-row"><span class="label">Data de Emissão:</span><span class="value">${new Date().toLocaleDateString('pt-BR')}</span></div>
+              
+              <div style="margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+                <span class="label" style="display:block; margin-bottom: 10px;">Vacinas em dia:</span>
+                <div>
+                  ${vacinasTomadas.length > 0 ? vacinasTomadas.map(v => `<span class="vacina-badge">${v.nome}</span>`).join('') : '<span class="value" style="font-size:14px;">Nenhuma vacina registrada.</span>'}
+                </div>
+              </div>
+              
+              <div class="footer">Este documento é gerado pelo PetTrack App e tem fins recreativos/informativos.</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Compartilhar RG do Pet' });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const salvarNotaDiario = async () => {
+    if (!nota.trim() && !fotoNota) return;
+    if (!fichaPet) return;
+
+    try {
+      const novaNota = {
+        id: Date.now().toString(),
+        texto: nota,
+        foto: fotoNota,
+        data: new Date().toISOString(),
+      };
+      const novaLista = [novaNota, ...diario];
+      await AsyncStorage.setItem(`@diario_${fichaPet.id}`, JSON.stringify(novaLista));
+      setDiario(novaLista);
+      setNota("");
+      setFotoNota(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const pickDiarioImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setFotoNota(result.assets[0].uri);
+    }
   };
 
   const getVacinasTomadas = (petId: string) => {
@@ -189,20 +293,34 @@ export default function PetScreen() {
         </View>
       )}
 
-      {/* Modal Ficha Clínica */}
+      {/* Modal Ficha Clínica / Diário */}
       <Modal visible={!!fichaPet} animationType="slide" transparent={true}>
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Histórico Veterinário</Text>
-              <TouchableOpacity onPress={fecharFicha} style={s.closeModalButton}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              <Text style={s.modalTitle}>{fichaPet?.nome}</Text>
+              <View style={{flexDirection: 'row', gap: 12}}>
+                <TouchableOpacity onPress={() => fichaPet && gerarRG(fichaPet)} style={s.rgButton}>
+                  <Ionicons name="id-card" size={20} color="#fff" />
+                  <Text style={s.rgButtonText}>RG</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={fecharFicha} style={s.closeModalButton}>
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={s.tabsContainer}>
+              <TouchableOpacity style={[s.tab, activeTab === "ficha" && s.activeTab]} onPress={() => setActiveTab("ficha")}>
+                <Text style={[s.tabText, activeTab === "ficha" && s.activeTabText]}>Ficha Médica</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.tab, activeTab === "diario" && s.activeTab]} onPress={() => setActiveTab("diario")}>
+                <Text style={[s.tabText, activeTab === "diario" && s.activeTabText]}>Diário</Text>
               </TouchableOpacity>
             </View>
 
-            {fichaPet && (
+            {fichaPet && activeTab === "ficha" && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Foto do pet na ficha */}
                 {fichaPet.fotoUri && (
                   <View style={s.fichaPhotoContainer}>
                     <Image source={{ uri: fichaPet.fotoUri }} style={s.fichaPhoto} />
@@ -236,6 +354,51 @@ export default function PetScreen() {
                   <Text style={s.fichaFooterText}>Gerado via PetTrack App</Text>
                 </View>
               </ScrollView>
+            )}
+
+            {fichaPet && activeTab === "diario" && (
+              <View style={{flex: 1}}>
+                <View style={s.diarioInputContainer}>
+                  <TextInput 
+                    style={s.diarioInput} 
+                    placeholder="O que o pet aprontou hoje?" 
+                    placeholderTextColor={colors.textMuted}
+                    value={nota}
+                    onChangeText={setNota}
+                    multiline
+                  />
+                  {fotoNota && (
+                    <View style={s.diarioPreviewContainer}>
+                      <Image source={{uri: fotoNota}} style={s.diarioPreview} />
+                      <TouchableOpacity onPress={() => setFotoNota(null)} style={s.diarioPreviewRemove}>
+                        <Ionicons name="close-circle" size={24} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <View style={s.diarioActions}>
+                    <TouchableOpacity onPress={pickDiarioImage} style={s.diarioBtnIcon}>
+                      <Ionicons name="image" size={24} color="#4f46e5" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={salvarNotaDiario} style={s.diarioBtnSave}>
+                      <Text style={s.diarioBtnSaveText}>Salvar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 20}}>
+                  {diario.length === 0 ? (
+                    <Text style={s.fichaEmptyText}>Seu diário está vazio. Comece a registrar momentos!</Text>
+                  ) : (
+                    diario.map((item) => (
+                      <View key={item.id} style={s.diarioCard}>
+                        <Text style={s.diarioDate}>{new Date(item.data).toLocaleDateString('pt-BR')} às {new Date(item.data).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</Text>
+                        {item.texto ? <Text style={s.diarioText}>{item.texto}</Text> : null}
+                        {item.foto ? <Image source={{uri: item.foto}} style={s.diarioImage} /> : null}
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
             )}
           </View>
         </View>
@@ -538,4 +701,26 @@ const makeStyles = (colors: any) => StyleSheet.create({
     color: colors.textMuted,
     fontWeight: "500",
   },
+  rgButton: {
+    flexDirection: "row", backgroundColor: "#4f46e5", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, alignItems: "center"
+  },
+  rgButtonText: { color: "#fff", fontWeight: "bold", marginLeft: 4, fontSize: 14 },
+  tabsContainer: { flexDirection: "row", marginBottom: 16, backgroundColor: colors.surfaceSecondary, borderRadius: 12, padding: 4 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 8 },
+  activeTab: { backgroundColor: colors.surface, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+  tabText: { fontWeight: "600", color: colors.textSecondary },
+  activeTabText: { color: colors.text },
+  diarioInputContainer: { backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.borderLight },
+  diarioInput: { color: colors.text, fontSize: 15, minHeight: 60, textAlignVertical: "top" },
+  diarioActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+  diarioBtnIcon: { padding: 8, backgroundColor: colors.surface, borderRadius: 12 },
+  diarioBtnSave: { backgroundColor: "#10b981", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 },
+  diarioBtnSaveText: { color: "#fff", fontWeight: "bold" },
+  diarioCard: { backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 16, marginBottom: 12 },
+  diarioDate: { fontSize: 12, color: colors.textSecondary, marginBottom: 8, fontWeight: "500" },
+  diarioText: { color: colors.text, fontSize: 15, lineHeight: 22 },
+  diarioImage: { width: "100%", height: 200, borderRadius: 12, marginTop: 12 },
+  diarioPreviewContainer: { position: "relative", marginTop: 8 },
+  diarioPreview: { width: 80, height: 80, borderRadius: 8 },
+  diarioPreviewRemove: { position: "absolute", top: -8, left: 64, backgroundColor: "#fff", borderRadius: 12 },
 });

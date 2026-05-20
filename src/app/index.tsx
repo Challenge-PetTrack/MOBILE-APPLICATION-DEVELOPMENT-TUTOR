@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import LottieView from "lottie-react-native";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -16,6 +17,12 @@ export default function LoginScreen() {
 
   const checkSession = async () => {
     try {
+      const onboardingDone = await AsyncStorage.getItem("@onboarding_done");
+      if (!onboardingDone) {
+        router.replace("/onboarding");
+        return;
+      }
+
       const session = await AsyncStorage.getItem("@session");
       if (session) {
         const user = JSON.parse(session);
@@ -44,7 +51,12 @@ export default function LoginScreen() {
 
   if (loading) return (
     <View style={s.centerContainer}>
-      <ActivityIndicator size="large" color="#4f46e5" />
+      <LottieView
+        source={{ uri: "https://lottie.host/802bc4eb-ed30-4e3f-9556-2eabfb4ff456/7q0tG5R5L3.json" }}
+        autoPlay
+        loop
+        style={{ width: 100, height: 100 }}
+      />
     </View>
   );
 
