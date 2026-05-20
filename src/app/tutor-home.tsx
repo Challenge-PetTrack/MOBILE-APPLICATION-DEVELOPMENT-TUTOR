@@ -85,7 +85,7 @@ export default function TutorHome() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("Meu Perfil", "Em breve você poderá editar seus dados aqui!")}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/ajustes-tutor"); }}>
               <Ionicons name="person-outline" size={24} color="#4f46e5" />
               <Text style={s.sideMenuText}>Meu Perfil</Text>
             </TouchableOpacity>
@@ -95,17 +95,17 @@ export default function TutorHome() {
               <Text style={s.sideMenuText}>Desenvolvedores</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("Configurações", "Configurações estarão disponíveis em breve.")}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/ajustes-tutor"); }}>
               <Ionicons name="settings-outline" size={24} color="#f59e0b" />
               <Text style={s.sideMenuText}>Configurações</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("FAQ", "Perguntas frequentes serão adicionadas em breve.")}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/faq"); }}>
               <Ionicons name="help-circle-outline" size={24} color="#10b981" />
               <Text style={s.sideMenuText}>FAQ</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.sideMenuItem} onPress={() => Alert.alert("SAC", "Entre em contato conosco pelo e-mail suporte@pettrack.com")}>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => { setMenuVisible(false); router.push("/sac"); }}>
               <Ionicons name="chatbubbles-outline" size={24} color="#ec4899" />
               <Text style={s.sideMenuText}>SAC</Text>
             </TouchableOpacity>

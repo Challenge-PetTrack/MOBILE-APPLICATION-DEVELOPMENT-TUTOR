@@ -111,9 +111,14 @@ export default function PetScreen() {
           )}
           <Text style={s.petName}>{item.nome}</Text>
         </View>
-        <TouchableOpacity onPress={() => removePet(item.id)} style={s.deleteButton}>
-          <Ionicons name="trash-outline" size={20} color="#ef4444" />
-        </TouchableOpacity>
+        <View style={{flexDirection: 'row', gap: 8}}>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/editar-pet", params: { id: item.id } })} style={s.editButton}>
+            <Ionicons name="pencil-outline" size={20} color="#10b981" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => removePet(item.id)} style={s.deleteButton}>
+            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
       </View>
       
       <View style={s.cardBody}>
@@ -375,6 +380,11 @@ const makeStyles = (colors: any) => StyleSheet.create({
     fontWeight: "bold",
     color: colors.text,
     marginLeft: 12,
+  },
+  editButton: {
+    padding: 8,
+    backgroundColor: "#ecfdf5",
+    borderRadius: 12,
   },
   deleteButton: {
     padding: 8,
