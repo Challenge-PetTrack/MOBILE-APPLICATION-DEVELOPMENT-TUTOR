@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
+import { storage } from "@/service/storage";
 import LottieView from "lottie-react-native";
 
 export default function LoginScreen() {
@@ -38,9 +39,9 @@ export default function LoginScreen() {
       setLoading(true);
       const usersData = await AsyncStorage.getItem("@users");
       const users = usersData ? JSON.parse(usersData) : [];
-      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.senha === senha);
+      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase().trim() && u.senha === senha);
       if (user) {
-        await AsyncStorage.setItem("@session", JSON.stringify(user));
+        await storage.saveSession(user);
         if (user.perfil === "veterinario") router.replace("/vet/home");
         else router.replace("/tutor/home");
       } else { setLoading(false); Alert.alert("Erro", "E-mail ou senha inválidos."); }

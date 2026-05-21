@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, ActivityIndicator } from "react-native";
 import { useTheme } from "@/context/ThemeContext";
+import { storage } from "@/service/storage";
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -14,16 +14,15 @@ export default function IndexScreen() {
 
   const checkSession = async () => {
     try {
-      const onboardingDone = await AsyncStorage.getItem("@onboarding_done");
+      const onboardingDone = await storage.getOnboardingStatus();
       if (!onboardingDone) {
         router.replace("/auth/onboarding");
         return;
       }
 
-      const session = await AsyncStorage.getItem("@session");
+      const session = await storage.getSession();
       if (session) {
-        const user = JSON.parse(session);
-        if (user.perfil === "veterinario") {
+        if (session.perfil === "veterinario") {
           router.replace("/vet/home");
         } else {
           router.replace("/tutor/home");

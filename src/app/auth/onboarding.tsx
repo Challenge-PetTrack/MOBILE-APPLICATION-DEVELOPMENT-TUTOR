@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, FlatList, Animated } from "react-native";
 import { useState, useRef } from "react";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { storage } from "@/service/storage";
 import LottieView from "lottie-react-native";
 
 const { width, height } = Dimensions.get("window");
@@ -49,13 +49,13 @@ export default function Onboarding() {
       slidesRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
       // Concluir onboarding
-      await AsyncStorage.setItem("@onboarding_done", "true");
+      await storage.setOnboardingDone();
       router.replace("/auth/login");
     }
   };
 
   const handleSkip = async () => {
-    await AsyncStorage.setItem("@onboarding_done", "true");
+    await storage.setOnboardingDone();
     router.replace("/auth/login");
   };
 

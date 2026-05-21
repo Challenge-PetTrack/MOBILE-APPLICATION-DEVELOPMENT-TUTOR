@@ -3,33 +3,33 @@ import { useState, useCallback } from "react";
 import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
+import ActionCard from "@/components/ActionCard";
+import { storage } from "@/service/storage";
 
 export default function TutorHome() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
   const [userName, setUserName] = useState("tutor");
 
   useFocusEffect(
     useCallback(() => {
-      AsyncStorage.getItem("@session").then(s => {
+      storage.getSession().then(s => {
         if (s) {
-          const u = JSON.parse(s);
-          setUserName(u.nome?.split(" ")[0] || "tutor");
+          setUserName(s.nome?.split(" ")[0] || "tutor");
         }
       });
     }, [])
   );
 
   const menuItems = [
-    { title: "Meu Pet", icon: "paw", route: "/pet", color: "#4f46e5" },
-    { title: "Financeiro", icon: "wallet", route: "/financeiro-tutor", color: "#10b981" },
-    { title: "Score", icon: "stats-chart", route: "/score", color: "#f59e0b" },
-    { title: "Vacinas", icon: "medkit", route: "/vacinas", color: "#ef4444" },
-    { title: "Medicamentos", icon: "medical", route: "/medicamentos", color: "#ec4899" },
-    { title: "Agendar Consulta", icon: "calendar", route: "/agendar-consulta", color: "#0d9488" },
+    { title: "Meu Pet", icon: "paw", route: "/tutor/pet", color: "#4f46e5" },
+    { title: "Financeiro", icon: "wallet", route: "/tutor/financeiro", color: "#10b981" },
+    { title: "Score", icon: "stats-chart", route: "/tutor/score", color: "#f59e0b" },
+    { title: "Vacinas", icon: "medkit", route: "/tutor/vacinas", color: "#ef4444" },
+    { title: "Medicamentos", icon: "medical", route: "/tutor/medicamentos", color: "#ec4899" },
+    { title: "Agendar Consulta", icon: "calendar", route: "/tutor/agendar-consulta", color: "#0d9488" },
   ];
 
   const s = makeStyles(colors);
@@ -60,16 +60,14 @@ export default function TutorHome() {
       
       <View style={s.grid}>
         {menuItems.map((item, index) => (
-          <TouchableOpacity 
+          <ActionCard 
             key={index} 
-            style={s.card} 
+            title={item.title}
+            iconName={item.icon as any}
+            iconColor={item.color}
             onPress={() => router.push(item.route as any)}
-          >
-            <View style={[s.iconContainer, { backgroundColor: item.color + "20" }]}>
-              <Ionicons name={item.icon as any} size={32} color={item.color} />
-            </View>
-            <Text style={s.cardTitle}>{item.title}</Text>
-          </TouchableOpacity>
+            isDark={isDark}
+          />
         ))}
       </View>
 
@@ -111,7 +109,7 @@ export default function TutorHome() {
             </TouchableOpacity>
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
-              await AsyncStorage.removeItem("@session");
+              await storage.clearSession();
               router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />
@@ -145,14 +143,6 @@ function makeStyles(colors: any) {
     bannerSubtitle: { color: "#e0e7ff", fontSize: 14, lineHeight: 20 },
     sectionTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 16 },
     grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-    card: {
-      backgroundColor: colors.surface, width: "47%", borderRadius: 16,
-      padding: 20, alignItems: "center", marginBottom: 16,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-    },
-    iconContainer: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", marginBottom: 12 },
-    cardTitle: { fontSize: 15, fontWeight: "600", color: colors.text, textAlign: "center" },
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", flexDirection: "row", justifyContent: "flex-end" },
     modalCloseArea: { flex: 1 },
     sideMenu: {
