@@ -97,9 +97,9 @@ Após o servidor rodar, leia o **QR Code** com a câmera do seu iPhone (ou app E
 
 ---
 
-## 🎓 Equipe (A Mente por trás da Magia)
+## 🎓 Desenvolvedores
 
-Este projeto foi desenvolvido com paixão e litros de café para a avaliação da **FIAP**.
+Este projeto foi desenvolvido com fins acadêmicos para a **FIAP**.
 
 | Nome | RM |
 | :--- | :--- |
@@ -110,5 +110,5 @@ Este projeto foi desenvolvido com paixão e litros de café para a avaliação d
 
 <br/>
 <div align="center">
-  <sub>Feito com ❤️ para mudar a vida dos pets.</sub>
+  <sub>Vai Corinthians!</sub>
 </div>
