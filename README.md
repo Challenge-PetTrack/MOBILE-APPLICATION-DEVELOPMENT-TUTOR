@@ -1,139 +1,114 @@
-# PetTrack
+<div align="center">
+  <img src="https://img.icons8.com/fluent/120/000000/dog.png" alt="PetTrack Logo" width="100"/>
+  <h1>🐾 PetTrack</h1>
+  <p><strong>O ecossistema definitivo para a saúde contínua do seu pet.</strong></p>
 
-O sistema operacional da saúde contínua do seu pet.
+  [![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](#)
+  [![Expo](https://img.shields.io/badge/Expo-000020?style=for-the-badge&logo=expo&logoColor=white)](#)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](#)
+  [![Lottie](https://img.shields.io/badge/Lottie-0FDF8F?style=for-the-badge&logo=lottiefiles&logoColor=white)](#)
 
----
-
-## Sobre o projeto
-
-O PetTrack é uma plataforma mobile desenvolvida em React Native com Expo que transforma a relação entre tutor, pet e clínica veterinária. O objetivo é mudar o modelo episódico e reativo de cuidado animal para uma experiência contínua, preventiva e inteligente.
-
-O ponto central da plataforma é o **Health Score**: um indicador dinâmico de 0 a 100 que acompanha a saúde do pet ao longo do tempo, atualizado com base em dados clínicos, comportamentais e histórico de vacinas e medicamentos.
-
----
-
-## Funcionalidades
-
-- Cadastro de pets com espécie, raça, idade e peso
-- Health Score dinâmico por pet
-- Alertas de vacinas, vermífugos e consultas
-- Agenda de eventos clínicos
-- Perfil do tutor com estatísticas
-- Armazenamento local com AsyncStorage
-- Navegação por abas e entre telas com Expo Router
+  <p>
+    <a href="#sobre-o-projeto">Sobre</a> •
+    <a href="#funcionalidades">Funcionalidades</a> •
+    <a href="#arquitetura-e-estrutura">Arquitetura</a> •
+    <a href="#como-rodar">Como Rodar</a> •
+    <a href="#equipe">Equipe</a>
+  </p>
+</div>
 
 ---
 
-## Tecnologias utilizadas
+## 📖 Sobre o projeto
 
-- React Native
-- Expo SDK 55
-- Expo Router
-- TypeScript
-- AsyncStorage (`@react-native-async-storage/async-storage`)
-- Expo Vector Icons (`@expo/vector-icons`)
-- React Navigation (Bottom Tabs)
+O **PetTrack** não é apenas um aplicativo de agenda. É uma plataforma mobile completa de ponta a ponta desenvolvida em React Native (Expo) que revoluciona a conexão entre **Tutores** e **Clínicas Veterinárias**. 
+
+Com um sistema de login inteligente que detecta o perfil do usuário, o aplicativo adapta completamente sua interface e ferramentas: oferecendo desde um "Diário do Pet" afetuoso para o tutor, até um robusto "Dashboard Financeiro e Clínico" para o veterinário.
 
 ---
 
-## Estrutura do projeto
+## ✨ Funcionalidades "Cabulosas"
 
-```
+O aplicativo foi desenhado com foco em **UI/UX Premium**, contendo micro-animações, suporte completo a **Dark Mode** e fluxos independentes.
+
+### 🧑‍🦱 Para o Tutor (O Dono do Pet)
+* 📊 **Health Score Dinâmico**: Uma pontuação de 0 a 100 que resume o estado geral do pet com base em vacinas, peso e histórico.
+* 📸 **Carteira de Identidade (RG do Pet)**: Gere e compartilhe o RG do seu pet em PDF direto pelo WhatsApp!
+* 🏥 **Gestão de Saúde**: Controle completo de carteira de vacinação, medicamentos e histórico de consultas.
+* 💸 **Dashboard Financeiro**: Controle os gastos com alimentação, brinquedos e veterinário, gerando gráficos visuais.
+* 🗓️ **Agendamento Prático**: Marque consultas com clínicas parceiras em apenas 3 cliques.
+
+### 🩺 Para o Veterinário (O Profissional)
+* 📈 **Visão Geral e Faturamento**: Um dashboard financeiro automático que calcula o lucro mensal baseado nas consultas concluídas.
+* 📝 **Prontuário com Anexos**: Adicione fotos (raio-x, exames de sangue) diretamente pelo celular na ficha do paciente.
+* 🖨️ **Receituário em PDF**: Escreva a prescrição no app e clique em "Gerar PDF" para enviar o receituário oficial carimbado direto para o WhatsApp do cliente.
+* 📞 **CRM Integrado**: Lista completa de clientes (tutores) cadastrados com atalho de discagem rápida.
+
+### 🎨 Experiência de Uso
+* 🎢 **Onboarding Interativo**: Carrossel explicativo animado (via Lottie Animations) para novos usuários.
+* 🌗 **Theme Engine**: Sistema de mudança entre modo claro e escuro em tempo real.
+
+---
+
+## 🏗️ Arquitetura e Estrutura
+
+O aplicativo foi recentemente refatorado para suportar escala de nível empresarial. O roteamento foi construído sob o **Expo Router v3**, utilizando a organização em grupos (Groups) para separar os domínios da aplicação, além de uma camada dedicada de Serviços.
+
+```text
 pettrack/
-├── app/
-│   ├── _layout.tsx               # Layout raiz com Stack
-│   ├── (tabs)/
-│   │   ├── _layout.tsx           # Tab bar com 4 abas
-│   │   ├── index.tsx             # Home - dashboard principal
-│   │   ├── meus-pets.tsx         # Lista de pets cadastrados
-│   │   ├── agenda.tsx            # Agenda de eventos
-│   │   └── perfil.tsx            # Perfil do tutor
-│   └── cadastro-pet/
-│       └── index.tsx             # Formulário de cadastro de pet
-├── assets/
-│   ├── logo.png
-│   └── logo2.png
-├── constants/
-│   └── Colors.ts                 # Paleta de cores do tema
-├── app.json
-├── babel.config.js
-├── package.json
-└── tsconfig.json
+├── src/
+│   ├── app/
+│   │   ├── _layout.tsx           # Provedor de Temas e Root Navigation
+│   │   ├── index.tsx             # Dispatcher Central de Sessão
+│   │   ├── (auth)/               # 🔒 Mundo Deslogado (Login, Onboarding)
+│   │   ├── (tutor)/              # 🧑‍🦱 Mundo do Tutor (Dashboard, Pets, Financeiro)
+│   │   └── (vet)/                # 🩺 Mundo do Veterinário (Consultas, PDFs, Agenda)
+│   ├── components/               # 🧩 Componentes Visuais Reutilizáveis (Ex: ActionCard)
+│   ├── context/                  # 🧠 Gerenciamento de Estado Global (ThemeContext)
+│   └── service/                  # 💾 Camada de Acesso a Dados (storage.ts)
+├── assets/                       # Ícones e Fontes
+└── refactor.js                   # Script de manutenção estrutural
 ```
 
 ---
 
-## Como rodar o projeto
+## 🚀 Como Rodar o Projeto
 
 ### Pré-requisitos
-
-- Node.js 20 ou superior
-- Expo CLI instalado globalmente ou via `npx`
-- Aplicativo Expo Go no celular (iOS ou Android)
+Certifique-se de ter o **Node.js (v20+)** e o **Aplicativo Expo Go** instalado no seu smartphone.
 
 ### Instalação
+1. Clone este repositório mágico:
+   ```bash
+   git clone https://github.com/Challenge-PetTrack/MOBILE-APPLICATION-DEVELOPMENT-TUTOR.git
+   cd MOBILE-APPLICATION-DEVELOPMENT-TUTOR
+   ```
+2. Instale as dependências com NPM ou Yarn:
+   ```bash
+   npm install
+   ```
 
-Clone o repositório e instale as dependências:
-
+### Levantando voo 🦅
+Inicie o servidor Metro Bundler com o cache limpo para evitar problemas de roteamento:
 ```bash
-git clone https://github.com/seu-usuario/pettrack.git
-cd pettrack
-npm install
+npx expo start -c
 ```
-
-Instale as dependências do Expo:
-
-```bash
-npx expo install @react-native-async-storage/async-storage @expo/vector-icons expo-router
-```
-
-### Executando
-
-```bash
-npx expo start
-```
-
-Escaneie o QR Code com o aplicativo Expo Go ou rode direto no emulador:
-
-```bash
-# Android
-npx expo start --android
-
-# iOS
-npx expo start --ios
-```
+Após o servidor rodar, leia o **QR Code** com a câmera do seu iPhone (ou app Expo Go no Android) ou pressione `a` para abrir no emulador Android local.
 
 ---
 
-## Requisitos atendidos
+## 🎓 Equipe (A Mente por trás da Magia)
 
-| Requisito | Implementacao |
-|---|---|
-| Navegacao entre telas | Expo Router com Stack e Bottom Tabs (4 abas + tela de cadastro) |
-| Prototipo visual completo | Tema dark, paleta laranja da marca, Health Score, cards e alertas |
-| Formulario com manipulacao de estado | useState com validacao de campos obrigatorios e feedback de erros |
-| Armazenamento local com AsyncStorage | Leitura e gravacao de pets e usuario em todas as telas |
-| Demonstracao em video narrada | Gravacao realizada pela equipe |
+Este projeto foi desenvolvido com paixão e litros de café para a avaliação da **FIAP**.
 
----
+| Nome | RM |
+| :--- | :--- |
+| **Gabriel Sbrana Campos** | RM 565849 |
+| **Moisés Waidemann Molinillo Júnior** | RM 563719 |
+| **Richard Freitas** | RM 566127 |
+| **Thiago Rodrigues da Mota** | RM 563650 |
 
-## Arquitetura
-
-O app segue o modelo de navegacao do Expo Router com file-based routing. Os dados sao persistidos localmente via AsyncStorage sem necessidade de backend. A paleta de cores e centralizada em `constants/Colors.ts` para consistencia visual em todo o projeto.
-
----
-
-## Integrantes
-
-Nome | RM
---- | ---
-Thiago Rodrigues da Mota | 563650
-Moisés Waidemann Molinillo Júnior | 563719
-Gabriel Sbrana Campos | 565849
-Richard Freitas | 566127
-
----
-
-## Licenca
-
-Este projeto foi desenvolvido para fins academicos na FIAP.
+<br/>
+<div align="center">
+  <sub>Feito com ❤️ para mudar a vida dos pets.</sub>
+</div>
