@@ -304,9 +304,9 @@ export default function AgendaVet() {
           ))
         )}
 
-        <TouchableOpacity style={s.fabButton}>
+        <TouchableOpacity style={s.fabButton} onPress={() => router.push("/vet/nova-consulta")}>
           <Ionicons name="add" size={24} color="#fff" />
-          <Text style={s.fabText}>Novo Agendamento</Text>
+          <Text style={s.fabText}>Nova Consulta</Text>
         </TouchableOpacity>
         <View style={{ height: 40 }} />
       </ScrollView>

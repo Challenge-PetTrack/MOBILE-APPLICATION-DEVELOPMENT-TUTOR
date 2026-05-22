@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Tex
 import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import ActionCard from "@/components/ActionCard";
 import { storage } from "@/service/storage";
@@ -37,9 +38,7 @@ export default function VetHome() {
       const user = session;
       if (user.nome) setVetName(user.nome.split(" ")[0]);
 
-      const clinicaStr = await storage.getSession(); // We'll just read from AsyncStorage for @clinica_dados, wait, storage.ts doesn't have clinica_dados.
-      // Let's import AsyncStorage back for the things storage.ts doesn't cover yet, or I can add them.
-      // Actually let's import AsyncStorage again at the top. I'll just change session.
+      const clinicaStr = await AsyncStorage.getItem("@clinica_dados");
       const valorConsulta = clinicaStr ? parseFloat(JSON.parse(clinicaStr).valorConsulta || "150") : 150;
 
       const data = await AsyncStorage.getItem("@consultas");
