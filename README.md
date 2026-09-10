@@ -6,12 +6,13 @@
   [![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](#)
   [![Expo](https://img.shields.io/badge/Expo-000020?style=for-the-badge&logo=expo&logoColor=white)](#)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](#)
-  [![Lottie](https://img.shields.io/badge/Lottie-0FDF8F?style=for-the-badge&logo=lottiefiles&logoColor=white)](#)
+  [![TanStack Query](https://img.shields.io/badge/TanStack_Query-FF4154?style=for-the-badge&logo=reactquery&logoColor=white)](#)
+  [![Spring Boot API](https://img.shields.io/badge/Java_API-6DB33F?style=for-the-badge&logo=spring&logoColor=white)](#)
 
   <p>
     <a href="#sobre-o-projeto">Sobre</a> •
-    <a href="#funcionalidades">Funcionalidades</a> •
-    <a href="#arquitetura-e-estrutura">Arquitetura</a> •
+    <a href="#sprint-3---entregáveis">Sprint 3</a> •
+    <a href="#arquitetura">Arquitetura</a> •
     <a href="#como-rodar">Como Rodar</a> •
     <a href="#equipe">Equipe</a>
   </p>
@@ -27,47 +28,42 @@ Com um sistema de login inteligente que detecta o perfil do usuário, o aplicati
 
 ---
 
-## ✨ Funcionalidades "Cabulosas"
+## 🎯 Sprint 3 - Entregáveis
 
-O aplicativo foi desenhado com foco em **UI/UX Premium**, contendo micro-animações, suporte completo a **Dark Mode** e fluxos independentes.
+Esta versão do aplicativo marca a integração completa com a API Java (Backend), atendendo a todos os requisitos da Sprint 3:
 
-### 🧑‍🦱 Para o Tutor (O Dono do Pet)
-* 📊 **Health Score Dinâmico**: Uma pontuação de 0 a 100 que resume o estado geral do pet com base em vacinas, peso e histórico.
-* 📸 **Carteira de Identidade (RG do Pet)**: Gere e compartilhe o RG do seu pet em PDF direto pelo WhatsApp!
-* 🏥 **Gestão de Saúde**: Controle completo de carteira de vacinação, medicamentos e histórico de consultas.
-* 💸 **Dashboard Financeiro**: Controle os gastos com alimentação, brinquedos e veterinário, gerando gráficos visuais.
-* 🗓️ **Agendamento Prático**: Marque consultas com clínicas parceiras em apenas 3 cliques.
+* **Integração Real com API:** O app consome a API Spring Boot desenvolvida no repositório `JAVA-ADVANCED`.
+* **Gerenciamento de Estado Server-Side:** Utilização rigorosa do `TanStack Query` (`@tanstack/react-query`) com `useQuery` e `useMutation` para cache, estados de loading, tratativa de erros e auto-refresh (sem re-renders desnecessários e sem useState manual).
+* **2 Funcionalidades com CRUD Completo:**
+  * **Pets:** Criação, Listagem, Edição e Exclusão de Pets integrados à API.
+  * **Medicamentos:** Controle total de histórico médico.
+  * *(Bônus)* **Consultas/Agenda Vet:** Gestão de agenda integrada.
+* **Autenticação Real (JWT):** O fluxo de login e cadastro bate na API real e o token é gerenciado via `AuthContext` com interceptors do `axios`.
+* **Proteção de Rotas Eficiente:** Bloqueio direto nos `_layout.tsx` do `expo-router` e bloqueio imediato pós-logout.
 
-### 🩺 Para o Veterinário (O Profissional)
-* 📈 **Visão Geral e Faturamento**: Um dashboard financeiro automático que calcula o lucro mensal baseado nas consultas concluídas.
-* 📝 **Prontuário com Anexos**: Adicione fotos (raio-x, exames de sangue) diretamente pelo celular na ficha do paciente.
-* 🖨️ **Receituário em PDF**: Escreva a prescrição no app e clique em "Gerar PDF" para enviar o receituário oficial carimbado direto para o WhatsApp do cliente.
-* 📞 **CRM Integrado**: Lista completa de clientes (tutores) cadastrados com atalho de discagem rápida.
-
-### 🎨 Experiência de Uso
-* 🎢 **Onboarding Interativo**: Carrossel explicativo animado (via Lottie Animations) para novos usuários.
-* 🌗 **Theme Engine**: Sistema de mudança entre modo claro e escuro em tempo real.
+> **Vídeo de Demonstração (YouTube):** [Cole o Link Aqui]
 
 ---
 
-## 🏗️ Arquitetura e Estrutura
+## 🏗️ Arquitetura
 
-O aplicativo foi recentemente refatorado para suportar escala de nível empresarial. O roteamento foi construído sob o **Expo Router v3**, utilizando a organização em grupos (Groups) para separar os domínios da aplicação, além de uma camada dedicada de Serviços.
+A arquitetura foi dividida em 3 camadas principais (Service -> Hooks -> UI) garantindo total isolamento de regras de requisições.
 
 ```text
-pettrack/
-├── src/
-│   ├── app/
-│   │   ├── _layout.tsx           # Provedor de Temas e Root Navigation
-│   │   ├── index.tsx             # Dispatcher Central de Sessão
-│   │   ├── (auth)/               # 🔒 Mundo Deslogado (Login, Onboarding)
-│   │   ├── (tutor)/              # 🧑‍🦱 Mundo do Tutor (Dashboard, Pets, Financeiro)
-│   │   └── (vet)/                # 🩺 Mundo do Veterinário (Consultas, PDFs, Agenda)
-│   ├── components/               # 🧩 Componentes Visuais Reutilizáveis (Ex: ActionCard)
-│   ├── context/                  # 🧠 Gerenciamento de Estado Global (ThemeContext)
-│   └── service/                  # 💾 Camada de Acesso a Dados (storage.ts)
-├── assets/                       # Ícones e Fontes
-└── refactor.js                   # Script de manutenção estrutural
+src/
+├── app/
+│   ├── _layout.tsx              # Providers: QueryClient, Auth, Theme
+│   ├── index.tsx                # Dispatcher de Sessão
+│   ├── (auth)/                  # 🔓 Telas deslogadas (Login API)
+│   ├── (tutor)/                 # 🧑‍🦱 Telas protegidas do Tutor
+│   │   └── _layout.tsx          # Guard de Rota
+│   └── (vet)/                   # 🩺 Telas protegidas do Veterinário
+│       └── _layout.tsx          # Guard de Rota
+├── components/                  # 🧩 Componentes de UI (LoadingScreen, ErrorScreen)
+├── config/                      # ⚙️ Instância do QueryClient
+├── context/                     # 🧠 AuthContext (Token) e ThemeContext
+├── hooks/                       # 🪝 Camada de Lógica (usePets, useMedicamentos)
+└── service/                     # 🌐 Camada HTTP (Axios + JWT interceptors)
 ```
 
 ---
@@ -75,31 +71,34 @@ pettrack/
 ## 🚀 Como Rodar o Projeto
 
 ### Pré-requisitos
-Certifique-se de ter o **Node.js (v20+)** e o **Aplicativo Expo Go** instalado no seu smartphone.
+1. **API Java:** O projeto [JAVA-ADVANCED](https://github.com/Challenge-PetTrack/JAVA-ADVANCED) deve estar rodando em sua máquina local na porta `8080`.
+2. **Ambiente Mobile:** Node.js (v20+) e aplicativo Expo Go no celular (ou Emulador Android).
 
 ### Instalação
-1. Clone este repositório mágico:
+1. Clone o repositório:
    ```bash
    git clone https://github.com/Challenge-PetTrack/MOBILE-APPLICATION-DEVELOPMENT-TUTOR.git
    cd MOBILE-APPLICATION-DEVELOPMENT-TUTOR
    ```
-2. Instale as dependências com NPM ou Yarn:
+2. Instale as dependências:
    ```bash
    npm install
    ```
 
 ### Levantando voo 🦅
-Inicie o servidor Metro Bundler com o cache limpo para evitar problemas de roteamento:
+Se você usa emulador Android, a conexão com `http://10.0.2.2:8080` funcionará de primeira.
+Se for testar via celular físico (Expo Go), você deve editar o IP em `src/service/api.ts` para o IP IPv4 da sua máquina (ex: `http://192.168.0.10:8080`).
+
 ```bash
 npx expo start -c
 ```
-Após o servidor rodar, leia o **QR Code** com a câmera do seu iPhone (ou app Expo Go no Android) ou pressione `a` para abrir no emulador Android local.
+Pressione `a` para abrir no emulador Android local, ou leia o QR Code no seu celular conectado na mesma rede Wi-Fi.
 
 ---
 
-## 🎓 Desenvolvedores
+## 🎓 Desenvolvedores (Equipe)
 
-Este projeto foi desenvolvido com fins acadêmicos para a **FIAP**.
+Este projeto foi desenvolvido com fins acadêmicos para a **FIAP (Turma 2TDS)**.
 
 | Nome | RM |
 | :--- | :--- |
