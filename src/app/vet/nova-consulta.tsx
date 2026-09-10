@@ -1,15 +1,19 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import LottieView from "lottie-react-native";
+import { useAuth } from "@/hooks/useAuth";
+import { useCreateEventoClinico } from "@/hooks/useEventosClinicos";
 
 export default function NovaConsulta() {
   const router = useRouter();
   const { colors } = useTheme();
   const s = makeStyles(colors);
+
+  const { user } = useAuth();
+  const { mutate: createConsulta, isPending } = useCreateEventoClinico();
 
   const [petNome, setPetNome] = useState("");
   const [tutorNome, setTutorNome] = useState("");
@@ -17,44 +21,38 @@ export default function NovaConsulta() {
   const [prescricao, setPrescricao] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const handleSalvar = async () => {
+  const handleSalvar = () => {
     if (!petNome.trim() || !diagnostico.trim()) {
       Alert.alert("Atenção", "Preencha pelo menos o nome do pet e o diagnóstico.");
       return;
     }
 
-    try {
-      const sessionStr = await AsyncStorage.getItem("@session");
-      if (!sessionStr) {
-        Alert.alert("Erro", "Sessão inválida.");
-        return;
-      }
-      const user = JSON.parse(sessionStr);
-
-      const novaConsulta = {
-        id: Date.now().toString(),
-        vetId: user.id,
-        petNome,
-        tutorNome,
-        diagnostico,
-        prescricao,
-        data: new Date().toISOString()
-      };
-
-      const existingData = await AsyncStorage.getItem("@consultas");
-      const consultas = existingData ? JSON.parse(existingData) : [];
-      consultas.push(novaConsulta);
-
-      await AsyncStorage.setItem("@consultas", JSON.stringify(consultas));
-
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.back();
-      }, 2500);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Erro", "Falha ao salvar consulta.");
+    if (!user) {
+      Alert.alert("Erro", "Sessão inválida.");
+      return;
     }
+
+    const novaConsulta = {
+      tipo: "consulta" as const,
+      vetId: user.id,
+      petNome,
+      tutorNome,
+      diagnostico,
+      prescricao,
+      data: new Date().toISOString()
+    };
+
+    createConsulta(novaConsulta, {
+      onSuccess: () => {
+        setShowSuccess(true);
+        setTimeout(() => {
+          router.back();
+        }, 2500);
+      },
+      onError: () => {
+        Alert.alert("Erro", "Falha ao salvar consulta.");
+      }
+    });
   };
 
   return (
@@ -120,8 +118,12 @@ export default function NovaConsulta() {
             />
           </View>
 
-          <TouchableOpacity style={s.button} onPress={handleSalvar}>
-            <Text style={s.buttonText}>Registrar Consulta</Text>
+          <TouchableOpacity style={s.button} onPress={handleSalvar} disabled={isPending}>
+            {isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={s.buttonText}>Registrar Consulta</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>

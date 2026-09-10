@@ -1,52 +1,30 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Linking, Alert } from "react-native";
-import { useState, useCallback } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Linking, Alert } from "react-native";
+import { useState, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import { useTheme } from "@/context/ThemeContext";
+import { useTutores } from "@/hooks/useTutores";
+import LoadingScreen from "@/components/LoadingScreen";
+import ErrorScreen from "@/components/ErrorScreen";
+import EmptyState from "@/components/EmptyState";
 
 export default function TutoresVet() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [tutores, setTutores] = useState<any[]>([]);
-  const [filtrados, setFiltrados] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadTutores();
-    }, [])
-  );
+  const { data: tutores = [], isLoading, isError } = useTutores();
 
-  const loadTutores = async () => {
-    try {
-      setLoading(true);
-      const usersData = await AsyncStorage.getItem("@users");
-      if (usersData) {
-        const users = JSON.parse(usersData);
-        const onlyTutores = users.filter((u: any) => u.perfil === "tutor");
-        setTutores(onlyTutores);
-        setFiltrados(onlyTutores);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+  const filtrados = useMemo(() => {
+    let result = tutores;
+    if (busca.trim()) {
+      result = result.filter((t: any) => 
+        t.nome?.toLowerCase().includes(busca.toLowerCase()) ||
+        t.email?.toLowerCase().includes(busca.toLowerCase())
+      );
     }
-  };
-
-  const handleBusca = (text: string) => {
-    setBusca(text);
-    if (!text.trim()) {
-      setFiltrados(tutores);
-    } else {
-      setFiltrados(tutores.filter(t => 
-        t.nome?.toLowerCase().includes(text.toLowerCase()) ||
-        t.email?.toLowerCase().includes(text.toLowerCase())
-      ));
-    }
-  };
+    return result;
+  }, [tutores, busca]);
 
   const abrirWhatsApp = (tutor: any) => {
     const numero = tutor.telefone?.replace(/\D/g, "");
@@ -66,6 +44,9 @@ export default function TutoresVet() {
 
   const s = makeStyles(colors);
 
+  if (isLoading) return <LoadingScreen message="Carregando tutores..." />;
+  if (isError) return <ErrorScreen message="Erro ao carregar tutores" />;
+
   return (
     <View style={s.container}>
       <View style={s.header}>
@@ -84,53 +65,49 @@ export default function TutoresVet() {
             placeholder="Buscar tutor pelo nome..."
             placeholderTextColor={colors.textMuted}
             value={busca}
-            onChangeText={handleBusca}
+            onChangeText={setBusca}
           />
         </View>
       </View>
 
-      {loading ? (
-        <View style={s.centerContainer}>
-          <ActivityIndicator size="large" color="#f59e0b" />
-        </View>
-      ) : (
-        <ScrollView style={s.list} showsVerticalScrollIndicator={false}>
-          {filtrados.length > 0 ? (
-            filtrados.map(tutor => (
-              <View key={tutor.id} style={s.card}>
-                <View style={s.avatarContainer}>
-                  <Text style={s.avatarText}>{(tutor.nome || "?")[0].toUpperCase()}</Text>
-                </View>
-                <View style={s.infoContainer}>
-                  <Text style={s.tutorName}>{tutor.nome || "Tutor Sem Nome"}</Text>
-                  <View style={s.contactRow}>
-                    <Ionicons name="mail" size={14} color={colors.textMuted} />
-                    <Text style={s.contactText}>{tutor.email}</Text>
-                  </View>
-                  {tutor.telefone ? (
-                    <View style={s.contactRow}>
-                      <Ionicons name="call" size={14} color={colors.textMuted} />
-                      <Text style={s.contactText}>{tutor.telefone}</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <TouchableOpacity 
-                  style={[s.whatsappButton, !tutor.telefone && s.whatsappButtonDisabled]} 
-                  onPress={() => abrirWhatsApp(tutor)}
-                >
-                  <Ionicons name="logo-whatsapp" size={24} color={tutor.telefone ? "#fff" : colors.textMuted} />
-                </TouchableOpacity>
+      <ScrollView style={s.list} showsVerticalScrollIndicator={false}>
+        {filtrados.length > 0 ? (
+          filtrados.map((tutor: any) => (
+            <View key={tutor.id} style={s.card}>
+              <View style={s.avatarContainer}>
+                <Text style={s.avatarText}>{(tutor.nome || "?")[0].toUpperCase()}</Text>
               </View>
-            ))
-          ) : (
-            <View style={s.emptyContainer}>
-              <Ionicons name="people-outline" size={64} color={colors.textMuted} />
-              <Text style={s.emptyText}>Nenhum tutor encontrado.</Text>
+              <View style={s.infoContainer}>
+                <Text style={s.tutorName}>{tutor.nome || "Tutor Sem Nome"}</Text>
+                <View style={s.contactRow}>
+                  <Ionicons name="mail" size={14} color={colors.textMuted} />
+                  <Text style={s.contactText}>{tutor.email}</Text>
+                </View>
+                {tutor.telefone ? (
+                  <View style={s.contactRow}>
+                    <Ionicons name="call" size={14} color={colors.textMuted} />
+                    <Text style={s.contactText}>{tutor.telefone}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <TouchableOpacity 
+                style={[s.whatsappButton, !tutor.telefone && s.whatsappButtonDisabled]} 
+                onPress={() => abrirWhatsApp(tutor)}
+              >
+                <Ionicons name="logo-whatsapp" size={24} color={tutor.telefone ? "#fff" : colors.textMuted} />
+              </TouchableOpacity>
             </View>
-          )}
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      )}
+          ))
+        ) : (
+          <View style={s.emptyContainer}>
+            <EmptyState
+              icon="people-outline"
+              message="Nenhum tutor encontrado.\nVerifique a busca ou a conexão com a API."
+            />
+          </View>
+        )}
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -180,6 +157,5 @@ function makeStyles(colors: any) {
     },
     whatsappButtonDisabled: { backgroundColor: colors.surfaceSecondary },
     emptyContainer: { alignItems: "center", justifyContent: "center", paddingTop: 60 },
-    emptyText: { marginTop: 16, fontSize: 16, color: colors.textMuted },
   });
 }
