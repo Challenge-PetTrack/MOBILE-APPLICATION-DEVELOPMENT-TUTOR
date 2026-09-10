@@ -1,5 +1,6 @@
 import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@/context/ThemeContext";
 
 type ActionCardProps = {
   title: string;
@@ -7,13 +8,14 @@ type ActionCardProps = {
   iconColor: string;
   onPress: () => void;
   badgeCount?: number;
-  isDark?: boolean;
 };
 
-export default function ActionCard({ title, iconName, iconColor, onPress, badgeCount, isDark }: ActionCardProps) {
-  const s = makeStyles(isDark);
+export default function ActionCard({ title, iconName, iconColor, onPress, badgeCount }: ActionCardProps) {
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
+  
   return (
-    <TouchableOpacity style={s.actionCard} onPress={onPress}>
+    <TouchableOpacity style={s.actionCard} activeOpacity={0.7} onPress={onPress}>
       <View style={{ position: "relative" }}>
         <View style={[s.iconContainer, { backgroundColor: iconColor + "20" }]}>
           <Ionicons name={iconName} size={32} color={iconColor} />
@@ -29,15 +31,17 @@ export default function ActionCard({ title, iconName, iconColor, onPress, badgeC
   );
 }
 
-const makeStyles = (isDark: boolean = false) => StyleSheet.create({
+const makeStyles = (colors: any) => StyleSheet.create({
   actionCard: {
     width: "48%",
-    backgroundColor: isDark ? "#1f2937" : "#ffffff",
+    backgroundColor: colors.surface,
     borderRadius: 20,
-    padding: 16,
+    padding: 20,
     alignItems: "center",
     marginBottom: 16,
-    shadowColor: "#000",
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -49,30 +53,31 @@ const makeStyles = (isDark: boolean = false) => StyleSheet.create({
     borderRadius: 32,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
   },
   actionTitle: {
     fontSize: 15,
-    fontWeight: "bold",
-    color: isDark ? "#f3f4f6" : "#1f2937",
+    fontWeight: "600",
+    color: colors.text,
     textAlign: "center",
   },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "#ef4444",
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: -2,
+    right: -2,
+    backgroundColor: colors.danger,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: isDark ? "#1f2937" : "#ffffff",
+    borderColor: colors.surface,
+    paddingHorizontal: 4,
   },
   badgeText: {
     color: "#fff",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "bold",
   },
 });
