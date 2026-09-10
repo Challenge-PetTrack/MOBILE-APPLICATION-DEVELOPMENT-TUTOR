@@ -1,56 +1,52 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function CadastroUsuarioScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { register } = useAuth();
+  
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [senha, setSenha] = useState("");
   const [perfil, setPerfil] = useState<"tutor" | "veterinario">("tutor");
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleCadastro = async () => {
     if (!nome || !email || !senha) {
-      Alert.alert("Erro", "Por favor, preencha todos os campos.");
+      setErrorMsg("Por favor, preencha todos os campos.");
       return;
     }
     if (perfil === "tutor" && !telefone) {
-      Alert.alert("Erro", "Tutores precisam informar um número de WhatsApp.");
+      setErrorMsg("Tutores precisam informar um número de WhatsApp.");
       return;
     }
+    setErrorMsg("");
 
     try {
-      const usersData = await AsyncStorage.getItem("@users");
-      const users = usersData ? JSON.parse(usersData) : [];
-      
-      const emailExists = users.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
-      if (emailExists) {
-        Alert.alert("Erro", "Este e-mail já está cadastrado.");
-        return;
-      }
-
-      const newUser = {
-        id: Date.now().toString(),
+      setIsSubmitting(true);
+      await register({
         nome,
         email,
         telefone: telefone.replace(/\D/g, ""), // só números
         senha,
         perfil
-      };
-
-      users.push(newUser);
-      await AsyncStorage.setItem("@users", JSON.stringify(users));
+      });
       
       Alert.alert("Sucesso", "Conta criada com sucesso!", [
         { text: "OK", onPress: () => router.replace("/auth/login") }
       ]);
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível criar a conta.");
+    } catch (e: any) {
+      setErrorMsg(e.message || "Não foi possível criar a conta.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -142,11 +138,18 @@ export default function CadastroUsuarioScreen() {
           />
         </View>
 
+        {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
+
         <TouchableOpacity 
           style={[s.submitButton, perfil === "veterinario" && s.submitButtonVet]} 
           onPress={handleCadastro}
+          disabled={isSubmitting}
         >
-          <Text style={s.submitButtonText}>Criar Conta</Text>
+          {isSubmitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={s.submitButtonText}>Criar Conta</Text>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -194,6 +197,7 @@ function makeStyles(colors: any) {
       backgroundColor: colors.inputBackground, borderRadius: 12, padding: 16,
       fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border,
     },
+    errorText: { color: "red", marginBottom: 12, textAlign: "center", fontSize: 14 },
     submitButton: {
       backgroundColor: "#4f46e5", borderRadius: 12, padding: 16, alignItems: "center",
       marginTop: 8, shadowColor: "#4f46e5", shadowOffset: { width: 0, height: 4 },
