@@ -1,42 +1,44 @@
-import { useEffect } from "react";
-import { useRouter } from "expo-router";
-import { View, ActivityIndicator } from "react-native";
-import { useTheme } from "@/context/ThemeContext";
-import { storage } from "@/service/storage";
+import { useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { storage } from '@/service/storage';
 
 export default function IndexScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
-    checkSession();
-  }, []);
+    if (isLoading) return;
+    checkAndRedirect();
+  }, [isLoading, isAuthenticated]);
 
-  const checkSession = async () => {
+  const checkAndRedirect = async () => {
     try {
       const onboardingDone = await storage.getOnboardingStatus();
       if (!onboardingDone) {
-        router.replace("/auth/onboarding");
+        router.replace('/auth/onboarding');
         return;
       }
 
-      const session = await storage.getSession();
-      if (session) {
-        if (session.perfil === "veterinario") {
-          router.replace("/vet/home");
+      if (isAuthenticated && user) {
+        if (user.perfil === 'veterinario') {
+          router.replace('/vet/home');
         } else {
-          router.replace("/tutor/home");
+          router.replace('/tutor/home');
         }
       } else {
-        router.replace("/auth/login");
+        router.replace('/auth/login');
       }
     } catch (e) {
-      router.replace("/auth/login");
+      router.replace('/auth/login');
     }
   };
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
       <ActivityIndicator size="large" color="#4f46e5" />
     </View>
   );
