@@ -5,13 +5,13 @@ import { getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
-  // TODO: Substitua pelas credenciais reais do seu projeto no Firebase Console
-  apiKey: "AIzaSy_YOUR_API_KEY",
-  authDomain: "pettrack-your-project.firebaseapp.com",
-  projectId: "pettrack-your-project",
-  storageBucket: "pettrack-your-project.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdef123456"
+  apiKey: "AIzaSyDigV2Mn_0r3fPD9ROrCrmvT9bGx8G7yHc",
+  authDomain: "pettrack-20299.firebaseapp.com",
+  projectId: "pettrack-20299",
+  storageBucket: "pettrack-20299.firebasestorage.app",
+  messagingSenderId: "863581464520",
+  appId: "1:863581464520:web:32974dc0df351119cec2fd",
+  measurementId: "G-KV7VS9TQ07"
 };
 
 // Initialize Firebase only if it hasn't been initialized yet
