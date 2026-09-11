@@ -109,7 +109,7 @@ export default function Onboarding() {
       </TouchableOpacity>
 
       <View style={{ flex: 3 }}>
-        <FlatList
+        <Animated.FlatList
           data={SLIDES}
           renderItem={renderItem}
           horizontal
