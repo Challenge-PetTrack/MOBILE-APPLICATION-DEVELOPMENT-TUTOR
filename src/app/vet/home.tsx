@@ -1,46 +1,23 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Image, ActivityIndicator } from "react-native";
-import { useState, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import ActionCard from "@/components/ActionCard";
-import { useAuth } from "@/hooks/useAuth";
-import { usePets } from "@/hooks/usePets";
-import { useEventosClinicos } from "@/hooks/useEventosClinicos";
-import { useTutores } from "@/hooks/useTutores";
-import LoadingScreen from "@/components/LoadingScreen";
+import { storage } from "@/service/storage";
 
 export default function VetHome() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [consultas, setConsultas] = useState<any[]>([]);
+  const [agendaBadge, setAgendaBadge] = useState(0);
+  const [vetName, setVetName] = useState("Doutor(a)");
   
-  const { user, logout } = useAuth();
-  const vetName = user?.nome?.split(" ")[0] || "Doutor(a)";
-
-  const { data: pets = [], isLoading: loadingPets } = usePets();
-  const { data: consultasRaw = [], isLoading: loadingConsultas } = useEventosClinicos();
-  const { data: tutores = [], isLoading: loadingTutores } = useTutores();
-
-  const loading = loadingPets || loadingConsultas || loadingTutores;
-
-  const consultas = useMemo(() => {
-    return consultasRaw.filter((c: any) => c.vetId === user?.id).reverse();
-  }, [consultasRaw, user?.id]);
-
-  const { consultasMes, faturamento } = useMemo(() => {
-    const valorConsulta = 150; // default
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const esteMes = consultas.filter((c: any) => {
-      const d = new Date(c.data);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    });
-    return {
-      consultasMes: esteMes.length,
-      faturamento: esteMes.length * valorConsulta
-    };
-  }, [consultas]);
+  // Dashboard Metrics
+  const [consultasMes, setConsultasMes] = useState(0);
+  const [faturamento, setFaturamento] = useState(0);
 
   // Busca de Pacientes
   const [busca, setBusca] = useState("");
@@ -48,27 +25,85 @@ export default function VetHome() {
   const [buscando, setBuscando] = useState(false);
   const [buscaFeita, setBuscaFeita] = useState(false);
 
-  const handleBuscar = () => {
-    if (!busca.trim()) return;
-    setBuscando(true);
-    setBuscaFeita(false);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-    setTimeout(() => {
+  const loadData = async () => {
+    try {
+      const session = await storage.getSession();
+      if (!session) return;
+      const user = session;
+      if (user.nome) setVetName(user.nome.split(" ")[0]);
+
+      const clinicaStr = await AsyncStorage.getItem("@clinica_dados");
+      const valorConsulta = clinicaStr ? parseFloat(JSON.parse(clinicaStr).valorConsulta || "150") : 150;
+
+      const data = await AsyncStorage.getItem("@consultas");
+      if (data) {
+        const all = JSON.parse(data);
+        const doVet = all.filter((c: any) => c.vetId === user.id);
+        setConsultas(doVet.reverse());
+
+        // Calcular métricas do mês atual
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        const consultasEsteMes = doVet.filter((c: any) => {
+          const d = new Date(c.data);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+
+        setConsultasMes(consultasEsteMes.length);
+        setFaturamento(consultasEsteMes.length * valorConsulta);
+      }
+
+      const agendaData = await AsyncStorage.getItem("@agenda_consultas");
+      const agendaVisto = await AsyncStorage.getItem("@agenda_visto_count");
+      if (agendaData) {
+        const agenda = JSON.parse(agendaData);
+        const total = agenda.length;
+        const visto = agendaVisto ? parseInt(agendaVisto) : 0;
+        setAgendaBadge(Math.max(0, total - visto));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleBuscar = async () => {
+    if (!busca.trim()) return;
+    try {
+      setBuscando(true);
+      setBuscaFeita(false);
+
+      // Buscar em todos os pets cadastrados
+      const petsData = await AsyncStorage.getItem("@pets");
+      const usersData = await AsyncStorage.getItem("@users");
+      const pets = petsData ? JSON.parse(petsData) : [];
+      const users = usersData ? JSON.parse(usersData) : [];
+
       const encontrados = pets.filter((p: any) =>
         p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
         p.especie?.toLowerCase().includes(busca.toLowerCase()) ||
         p.raca?.toLowerCase().includes(busca.toLowerCase())
       );
 
+      // Enriquecer com dados do tutor
       const enriquecidos = encontrados.map((p: any) => {
-        const tutor = tutores.find((u: any) => u.id === p.userId);
+        const tutor = users.find((u: any) => u.id === p.userId);
         return { ...p, tutorNome: tutor?.nome || "Tutor não encontrado", tutorTel: tutor?.telefone };
       });
 
       setResultados(enriquecidos);
       setBuscaFeita(true);
+    } catch (e) {
+      Alert.alert("Erro", "Falha ao realizar busca.");
+    } finally {
       setBuscando(false);
-    }, 500);
+    }
   };
 
   const limparBusca = () => {
@@ -77,13 +112,17 @@ export default function VetHome() {
     setBuscaFeita(false);
   };
 
-  const handleAgendaPress = () => {
+  const handleAgendaPress = async () => {
+    const agendaData = await AsyncStorage.getItem("@agenda_consultas");
+    if (agendaData) {
+      const agenda = JSON.parse(agendaData);
+      await AsyncStorage.setItem("@agenda_visto_count", agenda.length.toString());
+    }
+    setAgendaBadge(0);
     router.push("/vet/agenda");
   };
 
   const s = makeStyles(colors);
-
-  if (loading) return <LoadingScreen message="Carregando painel..." />;
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.contentContainer}>
@@ -167,7 +206,7 @@ export default function VetHome() {
         )}
       </View>
 
-      {/* Dashboard Financeiro */}
+      {/* Dashboard Financeiro (Clicável) */}
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <Text style={[s.sectionTitle, { marginBottom: 0 }]}>Visão Geral do Mês</Text>
         <TouchableOpacity onPress={() => router.push("/vet/financeiro")}>
@@ -199,16 +238,16 @@ export default function VetHome() {
           iconName="document-text"
           iconColor="#0d9488"
           onPress={() => router.push("/vet/nova-consulta")}
- 
+          isDark={isDark}
         />
 
         <ActionCard
           title="Agenda"
           iconName="calendar"
           iconColor="#8b5cf6"
-          badgeCount={0}
+          badgeCount={agendaBadge}
           onPress={handleAgendaPress}
- 
+          isDark={isDark}
         />
 
         <ActionCard
@@ -216,7 +255,7 @@ export default function VetHome() {
           iconName="people"
           iconColor="#f59e0b"
           onPress={() => router.push("/vet/tutores")}
- 
+          isDark={isDark}
         />
 
         <ActionCard
@@ -224,13 +263,13 @@ export default function VetHome() {
           iconName="wallet"
           iconColor="#10b981"
           onPress={() => router.push("/vet/financeiro")}
- 
+          isDark={isDark}
         />
       </View>
 
       <Text style={s.sectionTitle}>Consultas Recentes</Text>
       {consultas.length > 0 ? (
-        consultas.slice(0, 5).map((c: any, i: number) => (
+        consultas.slice(0, 5).map((c, i) => (
           <View key={i} style={s.consultaCard}>
             <View style={s.consultaHeader}>
               <Ionicons name="paw" size={20} color="#0f766e" />
@@ -273,8 +312,7 @@ export default function VetHome() {
             ))}
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
-              setMenuVisible(false);
-              await logout();
+              await storage.clearSession();
               router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />

@@ -1,19 +1,27 @@
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, Alert, Image, TextInput, ActivityIndicator
+  Modal, Alert, Image, TextInput
 } from "react-native";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
-import { useAuth } from "@/hooks/useAuth";
-import { useEventosClinicos, useUpdateEventoClinico } from "@/hooks/useEventosClinicos";
-import LoadingScreen from "@/components/LoadingScreen";
-import ErrorScreen from "@/components/ErrorScreen";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+
+// Agendamentos mock para dias variados
+const AGENDAMENTOS_MOCK = [
+  { id: "m1", horario: "09:00", tutor: "Maria Silva", pet: "Bolinha", motivo: "Consulta de Rotina", status: "concluido", origem: "interno", dataOffset: 0 },
+  { id: "m2", horario: "10:30", tutor: "João Souza", pet: "Rex", motivo: "Retorno Vacina V10", status: "pendente", origem: "interno", dataOffset: 0 },
+  { id: "m3", horario: "14:00", tutor: "Ana Costa", pet: "Mia", motivo: "Dermatite Suspeita", status: "pendente", origem: "interno", dataOffset: 0 },
+  { id: "m4", horario: "08:30", tutor: "Carlos Dias", pet: "Thor", motivo: "Avaliação Pré-Cirúrgica", status: "pendente", origem: "interno", dataOffset: 1 },
+  { id: "m5", horario: "11:00", tutor: "Fernanda Lima", pet: "Luna", motivo: "Consulta de Rotina", status: "pendente", origem: "interno", dataOffset: 1 },
+  { id: "m6", horario: "15:30", tutor: "Roberto Santos", pet: "Duke", motivo: "Vacinas Anuais", status: "pendente", origem: "interno", dataOffset: 2 },
+  { id: "m7", horario: "09:30", tutor: "Juliana Rocha", pet: "Mel", motivo: "Castração", status: "pendente", origem: "interno", dataOffset: -1 },
+  { id: "m8", horario: "16:00", tutor: "Pedro Alves", pet: "Bob", motivo: "Check-up Geral", status: "concluido", origem: "interno", dataOffset: -1 },
+];
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -38,85 +46,111 @@ function isSameDay(a: Date, b: Date): boolean {
 export default function AgendaVet() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { user } = useAuth();
   const hoje = new Date();
 
   const [diaSelecionado, setDiaSelecionado] = useState(hoje);
+  const [agendamentosDoDia, setAgendamentosDoDia] = useState<any[]>([]);
   const [detalheVisible, setDetalheVisible] = useState(false);
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<any>(null);
   const [novoStatus, setNovoStatus] = useState("");
   const [observacaoVet, setObservacaoVet] = useState("");
   const [anexos, setAnexos] = useState<string[]>([]);
+  const [vetInfo, setVetInfo] = useState<any>({});
 
-  // ─── Dados da API via TanStack Query ──────────────────────────────────
-  const { data: eventos, isLoading, isError, refetch } = useEventosClinicos();
-  const updateMutation = useUpdateEventoClinico();
-
-  // Semana exibida: 7 dias a partir de 2 dias atrás
+  // Semana exibida: 7 dias a partir de 3 dias atrás
   const semana = Array.from({ length: 7 }, (_, i) => addDays(hoje, i - 2));
 
-  // ✅ Loading state
-  if (isLoading) return <LoadingScreen message="Carregando agenda..." />;
-  // ✅ Error state
-  if (isError) return <ErrorScreen message="Erro ao carregar a agenda." onRetry={refetch} />;
+  useFocusEffect(
+    useCallback(() => {
+      carregarDia(diaSelecionado);
+    }, [diaSelecionado])
+  );
 
-  // Filtrar eventos do dia selecionado
-  const agendamentosDoDia = (eventos || [])
-    .filter((e: any) => {
-      if (!e.data) return false;
-      try {
-        const eventDate = new Date(e.data);
-        return isSameDay(eventDate, diaSelecionado);
-      } catch {
-        return false;
+  const carregarDia = async (dia: Date) => {
+    try {
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (sessionStr) {
+        setVetInfo(JSON.parse(sessionStr));
       }
-    })
-    .sort((a: any, b: any) => (a.data || "").localeCompare(b.data || ""));
+      const data = await AsyncStorage.getItem("@agenda_consultas");
+      const doTutor = data ? JSON.parse(data) : [];
+
+      // Mock: mapear offset para datas reais
+      const mockComData = AGENDAMENTOS_MOCK.map(m => ({
+        ...m,
+        dataReal: addDays(hoje, m.dataOffset),
+      })).filter(m => isSameDay(m.dataReal, dia));
+
+      // Reais dos tutores: filtrar pela data digitada
+      const reais = doTutor
+        .filter((a: any) => {
+          if (!a.data) return false;
+          // Tentar parsear a data do tutor (pode ser DD/MM/AAAA)
+          const parts = a.data.split("/");
+          if (parts.length === 3) {
+            const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+            return isSameDay(d, dia);
+          }
+          return false;
+        })
+        .map((a: any) => ({
+          ...a,
+          tutor: a.tutorNome,
+          status: a.status || "pendente",
+          dataReal: dia,
+        }));
+
+      const todos = [...mockComData, ...reais].sort((a, b) => a.horario.localeCompare(b.horario));
+      setAgendamentosDoDia(todos);
+
+      // Marcar como visto
+      await AsyncStorage.setItem("@agenda_visto_count", doTutor.length.toString());
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const abrirDetalhe = async (agendamento: any) => {
     setAgendamentoSelecionado(agendamento);
-    setNovoStatus(agendamento.status || "pendente");
-    setObservacaoVet(agendamento.prescricao || agendamento.diagnostico || "");
-
-    // Load attachments (local feature)
+    setNovoStatus(agendamento.status);
+    setObservacaoVet(agendamento.observacaoVet || "");
+    
+    // Load attachments
     try {
       const anexosData = await AsyncStorage.getItem(`@anexos_consulta_${agendamento.id}`);
       if (anexosData) setAnexos(JSON.parse(anexosData));
       else setAnexos([]);
-    } catch {
+    } catch (e) {
       setAnexos([]);
     }
-
+    
     setDetalheVisible(true);
   };
 
   const salvarDetalhe = async () => {
     if (!agendamentoSelecionado) return;
 
-    updateMutation.mutate(
-      {
-        id: agendamentoSelecionado.id,
-        data: {
-          status: novoStatus as any,
-          prescricao: observacaoVet,
-          diagnostico: observacaoVet,
-        },
-      },
-      {
-        onSuccess: async () => {
-          // Salvar anexos localmente (fotos não vão para a API)
-          await AsyncStorage.setItem(
-            `@anexos_consulta_${agendamentoSelecionado.id}`,
-            JSON.stringify(anexos)
-          );
-          setDetalheVisible(false);
-          Alert.alert("Salvo!", "Agendamento atualizado com sucesso.");
-        },
-        onError: () => {
-          Alert.alert("Erro", "Não foi possível salvar.");
-        },
+    try {
+      // Se for agendamento do tutor, atualizar no AsyncStorage
+      if (agendamentoSelecionado.origem === "tutor" || agendamentoSelecionado.tutorId) {
+        const data = await AsyncStorage.getItem("@agenda_consultas");
+        if (data) {
+          const agenda = JSON.parse(data);
+          const idx = agenda.findIndex((a: any) => a.id === agendamentoSelecionado.id);
+          if (idx !== -1) {
+            agenda[idx] = { ...agenda[idx], status: novoStatus, observacaoVet };
+            await AsyncStorage.setItem("@agenda_consultas", JSON.stringify(agenda));
+            await AsyncStorage.setItem(`@anexos_consulta_${agendamentoSelecionado.id}`, JSON.stringify(anexos));
+          }
+        }
       }
-    );
+
+      setDetalheVisible(false);
+      carregarDia(diaSelecionado);
+      Alert.alert("Salvo!", "Agendamento atualizado com sucesso.");
+    } catch (e) {
+      Alert.alert("Erro", "Não foi possível salvar.");
+    }
   };
 
   const pickAnexo = async () => {
@@ -167,8 +201,8 @@ export default function AgendaVet() {
             </div>
             
             <div class="info-box">
-              <div class="info-row"><span class="label">Paciente:</span> ${agendamentoSelecionado.petNome || agendamentoSelecionado.pet || 'N/A'}</div>
-              <div class="info-row"><span class="label">Tutor:</span> ${agendamentoSelecionado.tutorNome || agendamentoSelecionado.tutor || 'N/A'}</div>
+              <div class="info-row"><span class="label">Paciente:</span> ${agendamentoSelecionado.pet}</div>
+              <div class="info-row"><span class="label">Tutor:</span> ${agendamentoSelecionado.tutor}</div>
               <div class="info-row"><span class="label">Data:</span> ${formatarDataLonga(diaSelecionado)}</div>
             </div>
             
@@ -179,8 +213,8 @@ export default function AgendaVet() {
             
             <div class="signature">
               <div class="line"></div>
-              <div>${user?.nome || "Médico(a) Veterinário(a)"}</div>
-              <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">CRMV: Não informado</div>
+              <div>${vetInfo?.nome || "Médico(a) Veterinário(a)"}</div>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">CRMV: ${vetInfo?.crmv || "Não informado"}</div>
             </div>
           </body>
         </html>
@@ -243,22 +277,27 @@ export default function AgendaVet() {
             <Text style={s.emptyText}>Nenhum agendamento para este dia</Text>
           </View>
         ) : (
-          agendamentosDoDia.map((a: any, i: number) => (
+          agendamentosDoDia.map((a, i) => (
             <TouchableOpacity key={a.id || i} style={[s.card, a.origem === "tutor" && s.cardTutor]} onPress={() => abrirDetalhe(a)} activeOpacity={0.85}>
               <View style={s.timeColumn}>
-                <Text style={s.timeText}>{a.data ? new Date(a.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--"}</Text>
+                <Text style={s.timeText}>{a.horario}</Text>
                 <View style={[s.statusDot, { backgroundColor: a.status === "concluido" ? "#10b981" : a.status === "cancelado" ? "#ef4444" : "#f59e0b" }]} />
               </View>
               <View style={s.infoColumn}>
+                {a.origem === "tutor" && (
+                  <View style={s.newBadge}>
+                    <Text style={s.newBadgeText}>Solicitado ✨</Text>
+                  </View>
+                )}
                 <View style={s.infoRow}>
                   <Ionicons name="paw" size={16} color={colors.textSecondary} />
-                  <Text style={s.petName}>{a.petNome || a.pet || "Paciente"}</Text>
+                  <Text style={s.petName}>{a.pet}</Text>
                 </View>
                 <View style={s.infoRow}>
                   <Ionicons name="person" size={16} color={colors.textMuted} />
-                  <Text style={s.tutorName}>{a.tutorNome || a.tutor || "Tutor"}</Text>
+                  <Text style={s.tutorName}>{a.tutor}</Text>
                 </View>
-                <Text style={s.motivoText}>{a.descricao || a.tipo || a.motivo || "Consulta"}</Text>
+                <Text style={s.motivoText}>{a.motivo}</Text>
               </View>
               <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
             </TouchableOpacity>
@@ -289,26 +328,26 @@ export default function AgendaVet() {
                 <View style={s.detalheInfoCard}>
                   <View style={s.detalheRow}>
                     <Ionicons name="time" size={20} color="#8b5cf6" />
-                    <Text style={s.detalheLabel}>Data</Text>
-                    <Text style={s.detalheValue}>{formatarData(diaSelecionado)}</Text>
+                    <Text style={s.detalheLabel}>Horário</Text>
+                    <Text style={s.detalheValue}>{agendamentoSelecionado.horario} — {formatarData(diaSelecionado)}</Text>
                   </View>
                   <View style={s.detalheDivider} />
                   <View style={s.detalheRow}>
                     <Ionicons name="paw" size={20} color="#0d9488" />
                     <Text style={s.detalheLabel}>Paciente</Text>
-                    <Text style={s.detalheValue}>{agendamentoSelecionado.petNome || agendamentoSelecionado.pet || "N/A"}</Text>
+                    <Text style={s.detalheValue}>{agendamentoSelecionado.pet}</Text>
                   </View>
                   <View style={s.detalheDivider} />
                   <View style={s.detalheRow}>
                     <Ionicons name="person" size={20} color="#f59e0b" />
                     <Text style={s.detalheLabel}>Tutor</Text>
-                    <Text style={s.detalheValue}>{agendamentoSelecionado.tutorNome || agendamentoSelecionado.tutor || "N/A"}</Text>
+                    <Text style={s.detalheValue}>{agendamentoSelecionado.tutor}</Text>
                   </View>
                   <View style={s.detalheDivider} />
                   <View style={s.detalheRow}>
                     <Ionicons name="clipboard" size={20} color="#ec4899" />
                     <Text style={s.detalheLabel}>Motivo</Text>
-                    <Text style={[s.detalheValue, { flex: 1 }]}>{agendamentoSelecionado.descricao || agendamentoSelecionado.tipo || "Consulta"}</Text>
+                    <Text style={[s.detalheValue, { flex: 1 }]}>{agendamentoSelecionado.motivo}</Text>
                   </View>
                 </View>
 
@@ -318,10 +357,7 @@ export default function AgendaVet() {
                   {["pendente", "concluido", "cancelado"].map(st => (
                     <TouchableOpacity
                       key={st}
-                      style={[
-                        s.statusOption, 
-                        novoStatus === st && (st === 'concluido' ? s.statusOptionSelected_concluido : st === 'cancelado' ? s.statusOptionSelected_cancelado : s.statusOptionSelected_pendente)
-                      ]}
+                      style={[s.statusOption, novoStatus === st && s.statusOptionSelected(st)]}
                       onPress={() => setNovoStatus(st)}
                     >
                       <View style={[s.statusDot2, { backgroundColor: st === "concluido" ? "#10b981" : st === "cancelado" ? "#ef4444" : "#f59e0b" }]} />
@@ -374,16 +410,8 @@ export default function AgendaVet() {
                   <TouchableOpacity style={s.cancelarBtn} onPress={() => setDetalheVisible(false)}>
                     <Text style={s.cancelarText}>Fechar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.salvarBtn, updateMutation.isPending && { opacity: 0.6 }]}
-                    onPress={salvarDetalhe}
-                    disabled={updateMutation.isPending}
-                  >
-                    {updateMutation.isPending ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={s.salvarText}>Salvar</Text>
-                    )}
+                  <TouchableOpacity style={s.salvarBtn} onPress={salvarDetalhe}>
+                    <Text style={s.salvarText}>Salvar</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>
@@ -473,9 +501,10 @@ function makeStyles(colors: any) {
       paddingVertical: 10, borderRadius: 12, backgroundColor: colors.surfaceSecondary,
       borderWidth: 1, borderColor: colors.border,
     },
-    statusOptionSelected_pendente: { backgroundColor: "#f59e0b", borderColor: "transparent" },
-    statusOptionSelected_concluido: { backgroundColor: "#10b981", borderColor: "transparent" },
-    statusOptionSelected_cancelado: { backgroundColor: "#ef4444", borderColor: "transparent" },
+    statusOptionSelected: (st: string) => ({
+      backgroundColor: st === "concluido" ? "#10b981" : st === "cancelado" ? "#ef4444" : "#f59e0b",
+      borderColor: "transparent",
+    }),
     statusOptionText: { fontSize: 13, fontWeight: "600", color: colors.text, marginLeft: 6 },
     statusDot2: { width: 10, height: 10, borderRadius: 5 },
     obsInput: {

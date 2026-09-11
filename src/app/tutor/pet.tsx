@@ -1,22 +1,24 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Modal, ScrollView, Image, TextInput } from "react-native";
-import { useState, useCallback, useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Modal, ScrollView, Image } from "react-native";
+import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 
-import { usePets, useDeletePet } from "@/hooks/usePets";
-import { useAuth } from "@/hooks/useAuth";
-import LoadingScreen from "@/components/LoadingScreen";
-import ErrorScreen from "@/components/ErrorScreen";
-import EmptyState from "@/components/EmptyState";
-import ScoreGauge from "@/components/ScoreGauge";
-import PetCard from "@/components/PetCard";
-
-import { PetDTO } from '@/service/petService';
+type Pet = {
+  id: string;
+  nome: string;
+  especie: string;
+  raca: string;
+  idade: string;
+  peso: string;
+  createdAt: string;
+  fotoUri?: string | null;
+  userId?: string;
+};
 
 const VACINAS_MAP: Record<string, string> = {
   v10: "V8 / V10 (Múltipla Canina)",
@@ -32,41 +34,58 @@ export default function PetScreen() {
   const { colors } = useTheme();
   const s = makeStyles(colors);
 
-  const { user } = useAuth();
-  const { data: pets = [], isLoading, isError, refetch } = usePets(user?.id ? Number(user.id) : undefined);
-  const { mutate: deletePet } = useDeletePet();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
+  const [pets, setPets] = useState<Pet[]>([]);
   const [vacinasRecord, setVacinasRecord] = useState<any>({});
-  const [fichaPet, setFichaPet] = useState<PetDTO | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fichaPet, setFichaPet] = useState<Pet | null>(null);
   const [activeTab, setActiveTab] = useState<"ficha" | "diario">("ficha");
   const [diario, setDiario] = useState<any[]>([]);
   const [nota, setNota] = useState("");
   const [fotoNota, setFotoNota] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadVacinas();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-  const loadVacinas = async () => {
+  const loadData = async () => {
     try {
+      setLoading(true);
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (!sessionStr) return;
+      const user = JSON.parse(sessionStr);
+
+      const savedPets = await AsyncStorage.getItem("@pets");
+      if (savedPets) {
+        const allPets = JSON.parse(savedPets);
+        setPets(allPets.filter((p: any) => p.userId === user.id));
+      } else {
+        setPets([]);
+      }
+
       const vacinasData = await AsyncStorage.getItem("@vacinas_por_pet");
       if (vacinasData) {
         setVacinasRecord(JSON.parse(vacinasData));
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const removePet = (id: string) => {
-    setDeletingId(id);
-    deletePet(Number(id), {
-      onSettled: () => setDeletingId(null),
-    });
+  const removePet = async (id: string) => {
+    try {
+      const updatedPets = pets.filter(pet => pet.id !== id);
+      await AsyncStorage.setItem("@pets", JSON.stringify(updatedPets));
+      setPets(updatedPets);
+    } catch (error) {
+      console.error("Erro ao remover pet:", error);
+    }
   };
 
-  const abrirFicha = async (pet: PetDTO) => {
+  const abrirFicha = async (pet: Pet) => {
     setFichaPet(pet);
     setActiveTab("ficha");
     // Load diary
@@ -83,9 +102,9 @@ export default function PetScreen() {
     setFotoNota(null);
   };
 
-  const gerarRG = async (pet: PetDTO) => {
+  const gerarRG = async (pet: Pet) => {
     try {
-      const vacinasTomadas = getVacinasTomadas(String(pet.id));
+      const vacinasTomadas = getVacinasTomadas(pet.id);
       const html = `
         <html>
           <head>
@@ -183,18 +202,62 @@ export default function PetScreen() {
     return tomadas;
   };
 
-  const renderPetCard = ({ item }: { item: PetDTO }) => (
-    <PetCard
-      pet={item}
-      onEdit={() => router.push({ pathname: "/tutor/editar-pet", params: { id: item.id } })}
-      onDelete={() => removePet(String(item.id))}
-      onFicha={() => abrirFicha(item)}
-      isDeleting={deletingId === String(item.id)}
-    />
+  const renderPetCard = ({ item }: { item: Pet }) => (
+    <View style={s.card}>
+      <View style={s.cardHeader}>
+        <View style={s.cardTitleContainer}>
+          {item.fotoUri ? (
+            <Image source={{ uri: item.fotoUri }} style={s.petAvatar} />
+          ) : (
+            <View style={s.petAvatarPlaceholder}>
+              <Ionicons name="paw" size={22} color="#4f46e5" />
+            </View>
+          )}
+          <Text style={s.petName}>{item.nome}</Text>
+        </View>
+        <View style={{flexDirection: 'row', gap: 8}}>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/tutor/editar-pet", params: { id: item.id } })} style={s.editButton}>
+            <Ionicons name="pencil-outline" size={20} color="#10b981" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => removePet(item.id)} style={s.deleteButton}>
+            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      <View style={s.cardBody}>
+        <View style={s.infoRow}>
+          <Text style={s.infoLabel}>Espécie:</Text>
+          <Text style={s.infoValue}>{item.especie}</Text>
+        </View>
+        {item.raca ? (
+          <View style={s.infoRow}>
+            <Text style={s.infoLabel}>Raça:</Text>
+            <Text style={s.infoValue}>{item.raca}</Text>
+          </View>
+        ) : null}
+        <View style={s.row}>
+          {item.idade ? (
+            <View style={s.infoBox}>
+              <Text style={s.infoBoxLabel}>Idade</Text>
+              <Text style={s.infoBoxValue}>{item.idade} anos</Text>
+            </View>
+          ) : null}
+          {item.peso ? (
+            <View style={s.infoBox}>
+              <Text style={s.infoBoxLabel}>Peso</Text>
+              <Text style={s.infoBoxValue}>{item.peso} kg</Text>
+            </View>
+          ) : null}
+        </View>
+        
+        <TouchableOpacity style={s.fichaButton} onPress={() => abrirFicha(item)}>
+          <Ionicons name="document-text-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={s.fichaButtonText}>Gerar Ficha Clínica</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
-
-  if (isLoading) return <LoadingScreen />;
-  if (isError) return <ErrorScreen onRetry={refetch} />;
 
   return (
     <View style={s.container}>
@@ -206,16 +269,28 @@ export default function PetScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {pets.length > 0 ? (
+      {loading ? (
+        <View style={s.centerContainer}>
+          <ActivityIndicator size="large" color="#4f46e5" />
+        </View>
+      ) : pets.length > 0 ? (
         <FlatList
           data={pets}
-          keyExtractor={(item) => String(item.id)}
+          keyExtractor={(item) => item.id}
           renderItem={renderPetCard}
           contentContainerStyle={s.listContainer}
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        <EmptyState message="Nenhum pet cadastrado." />
+        <View style={s.emptyContainer}>
+          <Ionicons name="sad-outline" size={64} color={colors.textMuted} />
+          <Text style={s.emptyTitle}>Nenhum pet cadastrado</Text>
+          <Text style={s.emptySubtitle}>Você ainda não possui nenhum pet na sua lista.</Text>
+          <TouchableOpacity style={s.addButton} onPress={() => router.push("/tutor/cadastro-pet")}>
+            <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={s.addButtonText}>Cadastrar um Pet</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Modal Ficha Clínica / Diário */}
@@ -258,12 +333,12 @@ export default function PetScreen() {
                   <Text style={s.fichaData}><Text style={s.fichaLabel}>Raça:</Text> {fichaPet.raca || "Não informada"}</Text>
                   <Text style={s.fichaData}><Text style={s.fichaLabel}>Idade:</Text> {fichaPet.idade || "-"} anos</Text>
                   <Text style={s.fichaData}><Text style={s.fichaLabel}>Peso:</Text> {fichaPet.peso || "-"} kg</Text>
-                  <ScoreGauge pesoAtual={fichaPet?.peso} vacinasTomadas={getVacinasTomadas(String(fichaPet?.id)).length} />
                 </View>
+
                 <View style={s.fichaSection}>
                   <Text style={s.fichaSectionTitle}>Imunização Realizada</Text>
-                  {getVacinasTomadas(String(fichaPet.id)).length > 0 ? (
-                    getVacinasTomadas(String(fichaPet.id)).map((v, i) => (
+                  {getVacinasTomadas(fichaPet.id).length > 0 ? (
+                    getVacinasTomadas(fichaPet.id).map((v, i) => (
                       <View key={i} style={s.vacinaFichaItem}>
                         <Ionicons name="checkmark-circle" size={16} color="#10b981" />
                         <Text style={s.vacinaFichaNome}>{v.nome}</Text>

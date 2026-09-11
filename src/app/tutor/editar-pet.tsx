@@ -1,15 +1,13 @@
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, Alert, Image as RNImage, ActivityIndicator
+  KeyboardAvoidingView, Platform, Alert, Image as RNImage
 } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
-import { usePetById, useUpdatePet } from "@/hooks/usePets";
-import LoadingScreen from "@/components/LoadingScreen";
-import ErrorScreen from "@/components/ErrorScreen";
 
 export default function EditarPet() {
   const router = useRouter();
@@ -17,26 +15,47 @@ export default function EditarPet() {
   const { colors } = useTheme();
   const s = makeStyles(colors);
 
-  const { data: pet, isLoading: isLoadingPet, isError, refetch } = usePetById(Number(id));
-  const { mutate: updatePet, isPending } = useUpdatePet();
-
   const [nome, setNome] = useState("");
   const [especie, setEspecie] = useState("");
   const [raca, setRaca] = useState("");
   const [idade, setIdade] = useState("");
   const [peso, setPeso] = useState("");
   const [fotoUri, setFotoUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (pet) {
-      setNome(pet.nome || "");
-      setEspecie(pet.especie || "");
-      setRaca(pet.raca || "");
-      setIdade(pet.idade || "");
-      setPeso(pet.peso || "");
-      setFotoUri(pet.fotoUri || null);
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        loadPetData();
+      } else {
+        Alert.alert("Erro", "Pet não encontrado.", [{ text: "OK", onPress: () => router.back() }]);
+      }
+    }, [id])
+  );
+
+  const loadPetData = async () => {
+    try {
+      const existingPetsJson = await AsyncStorage.getItem("@pets");
+      if (existingPetsJson) {
+        const pets = JSON.parse(existingPetsJson);
+        const pet = pets.find((p: any) => p.id === id);
+        if (pet) {
+          setNome(pet.nome || "");
+          setEspecie(pet.especie || "");
+          setRaca(pet.raca || "");
+          setIdade(pet.idade || "");
+          setPeso(pet.peso || "");
+          setFotoUri(pet.fotoUri || null);
+        } else {
+          Alert.alert("Erro", "Pet não encontrado.", [{ text: "OK", onPress: () => router.back() }]);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar pet:", error);
+    } finally {
+      setLoading(false);
     }
-  }, [pet]);
+  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -94,31 +113,47 @@ export default function EditarPet() {
     );
   };
 
-  const handleSalvar = () => {
+  const handleSalvar = async () => {
     if (!nome.trim() || !especie.trim()) {
       Alert.alert("Atenção", "Por favor, preencha pelo menos o nome e a espécie do pet.");
       return;
     }
 
-    updatePet({
-      id: Number(id),
-      data: { nome, especie, raca, idade, peso, fotoUri: fotoUri || undefined }
-    }, {
-      onSuccess: () => {
-        router.back();
-      },
-      onError: () => {
-        Alert.alert("Erro", "Falha ao atualizar pet");
+    try {
+      const existingPetsJson = await AsyncStorage.getItem("@pets");
+      const existingPets = existingPetsJson ? JSON.parse(existingPetsJson) : [];
+      
+      const petIndex = existingPets.findIndex((p: any) => p.id === id);
+      
+      if (petIndex !== -1) {
+        existingPets[petIndex] = {
+          ...existingPets[petIndex],
+          nome,
+          especie,
+          raca,
+          idade,
+          peso,
+          fotoUri,
+        };
+        
+        await AsyncStorage.setItem("@pets", JSON.stringify(existingPets));
+
+        Alert.alert(
+          "Sucesso!",
+          "Os dados do pet foram atualizados.",
+          [{ text: "OK", onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert("Erro", "Não foi possível encontrar o pet para atualizar.");
       }
-    });
+    } catch (error) {
+      console.error("Erro ao atualizar pet:", error);
+      Alert.alert("Erro", "Ocorreu um erro ao tentar salvar as alterações.");
+    }
   };
 
-  if (isLoadingPet) {
-    return <LoadingScreen />;
-  }
-
-  if (isError) {
-    return <ErrorScreen onRetry={refetch} />;
+  if (loading) {
+    return <View style={s.container}><Text style={{marginTop: 100, textAlign: 'center', color: colors.text}}>Carregando...</Text></View>;
   }
 
   return (
@@ -211,12 +246,8 @@ export default function EditarPet() {
             </View>
           </View>
 
-          <TouchableOpacity style={[s.button, isPending && { opacity: 0.7 }]} onPress={handleSalvar} disabled={isPending}>
-            {isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.buttonText}>Salvar Alterações</Text>
-            )}
+          <TouchableOpacity style={s.button} onPress={handleSalvar}>
+            <Text style={s.buttonText}>Salvar Alterações</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

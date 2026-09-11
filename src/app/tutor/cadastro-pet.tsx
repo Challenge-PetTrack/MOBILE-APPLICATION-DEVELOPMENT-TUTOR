@@ -1,21 +1,18 @@
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, Alert, Image as RNImage, ActivityIndicator
+  KeyboardAvoidingView, Platform, Alert, Image as RNImage
 } from "react-native";
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
-import { useCreatePet } from "@/hooks/usePets";
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Cadastro() {
   const router = useRouter();
   const { colors } = useTheme();
   const s = makeStyles(colors);
-  const { user } = useAuth();
-  const { mutate: createPet, isPending } = useCreatePet();
 
   const [nome, setNome] = useState("");
   const [especie, setEspecie] = useState("");
@@ -40,11 +37,13 @@ export default function Cadastro() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
-      base64: true,
+      base64: true, // Salvar como base64 para persistência no AsyncStorage
     });
 
     if (!result.canceled && result.assets[0]) {
-      setFotoUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      // Guardar URI local para exibição e base64 para persistência
+      setFotoUri(asset.uri);
     }
   };
 
@@ -79,35 +78,47 @@ export default function Cadastro() {
     );
   };
 
-  const handleCadastrar = () => {
+  const handleCadastrar = async () => {
     if (!nome.trim() || !especie.trim()) {
       Alert.alert("Atenção", "Por favor, preencha pelo menos o nome e a espécie do pet.");
       return;
     }
 
-    if (!user?.id) {
-      Alert.alert("Erro", "Usuário não encontrado. Por favor, faça login novamente.");
-      return;
-    }
-
-    const petData = {
-      tutorId: user.id,
-      nome,
-      especie,
-      raca,
-      idade,
-      peso,
-      fotoUri: fotoUri || undefined,
-    };
-
-    createPet(petData, {
-      onSuccess: () => {
-        router.back();
-      },
-      onError: () => {
-        Alert.alert("Erro", "Falha ao cadastrar pet");
+    try {
+      const sessionStr = await AsyncStorage.getItem("@session");
+      if (!sessionStr) {
+        Alert.alert("Erro", "Sessão inválida. Por favor, faça login novamente.");
+        return;
       }
-    });
+      const user = JSON.parse(sessionStr);
+
+      const newPet = {
+        id: Date.now().toString(),
+        userId: user.id,
+        nome,
+        especie,
+        raca,
+        idade,
+        peso,
+        fotoUri: fotoUri || null,
+        createdAt: new Date().toISOString()
+      };
+
+      const existingPetsJson = await AsyncStorage.getItem("@pets");
+      const existingPets = existingPetsJson ? JSON.parse(existingPetsJson) : [];
+      
+      const updatedPets = [...existingPets, newPet];
+      await AsyncStorage.setItem("@pets", JSON.stringify(updatedPets));
+
+      Alert.alert(
+        "Sucesso! 🐾",
+        "O pet foi cadastrado com sucesso.",
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      console.error("Erro ao salvar pet:", error);
+      Alert.alert("Erro", "Ocorreu um erro ao tentar salvar o cadastro do pet.");
+    }
   };
 
   return (
@@ -200,12 +211,8 @@ export default function Cadastro() {
             </View>
           </View>
 
-          <TouchableOpacity style={[s.button, isPending && { opacity: 0.7 }]} onPress={handleCadastrar} disabled={isPending}>
-            {isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.buttonText}>Salvar Cadastro</Text>
-            )}
+          <TouchableOpacity style={s.button} onPress={handleCadastrar}>
+            <Text style={s.buttonText}>Salvar Cadastro</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

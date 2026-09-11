@@ -1,17 +1,10 @@
-import { Stack } from 'expo-router';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '@/config/queryClient';
-import { AuthProvider } from '@/context/AuthContext';
-import { ThemeProvider } from '@/context/ThemeContext';
+import { Stack } from "expo-router";
+import { ThemeProvider } from "@/context/ThemeContext";
 
-export default function RootLayout() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+export default function Layout(){
+    return(
         <ThemeProvider>
-          <Stack screenOptions={{ headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false }} />
         </ThemeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
+    );
 }

@@ -1,38 +1,65 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from "react-native";
-import { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
+import { useState, useCallback } from "react";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
-import { useAuth } from "@/hooks/useAuth";
+import { storage } from "@/service/storage";
+import LottieView from "lottie-react-native";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { login } = useAuth();
-  
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(useCallback(() => { checkSession(); }, []));
+
+  const checkSession = async () => {
+    try {
+      const onboardingDone = await AsyncStorage.getItem("@onboarding_done");
+      if (!onboardingDone) {
+        router.replace("/auth/onboarding");
+        return;
+      }
+
+      const session = await AsyncStorage.getItem("@session");
+      if (session) {
+        const user = JSON.parse(session);
+        if (user.perfil === "veterinario") router.replace("/vet/home");
+        else router.replace("/tutor/home");
+      } else setLoading(false);
+    } catch (e) { setLoading(false); }
+  };
 
   const handleLogin = async () => {
-    if (!email || !senha) { 
-      setErrorMsg("Preencha todos os campos.");
-      return; 
-    }
-    setErrorMsg("");
+    if (!email || !senha) { Alert.alert("Erro", "Preencha todos os campos."); return; }
     try {
-      setIsSubmitting(true);
-      await login(email, senha);
-      // Redirect is handled automatically by AuthContext
-    } catch (e: any) { 
-      setErrorMsg(e.message || "Falha ao realizar login."); 
-    } finally {
-      setIsSubmitting(false);
-    }
+      setLoading(true);
+      const usersData = await AsyncStorage.getItem("@users");
+      const users = usersData ? JSON.parse(usersData) : [];
+      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase().trim() && u.senha === senha);
+      if (user) {
+        await storage.saveSession(user);
+        if (user.perfil === "veterinario") router.replace("/vet/home");
+        else router.replace("/tutor/home");
+      } else { setLoading(false); Alert.alert("Erro", "E-mail ou senha inválidos."); }
+    } catch (e) { setLoading(false); Alert.alert("Erro", "Falha ao realizar login."); }
   };
 
   const s = makeStyles(colors);
+
+  if (loading) return (
+    <View style={s.centerContainer}>
+      <LottieView
+        source={{ uri: "https://lottie.host/802bc4eb-ed30-4e3f-9556-2eabfb4ff456/7q0tG5R5L3.json" }}
+        autoPlay
+        loop
+        style={{ width: 100, height: 100 }}
+      />
+    </View>
+  );
 
   return (
     <View style={s.container}>
@@ -58,15 +85,8 @@ export default function LoginScreen() {
             value={senha} onChangeText={setSenha} placeholderTextColor={colors.textMuted}
           />
         </View>
-
-        {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
-
-        <TouchableOpacity style={s.loginButton} onPress={handleLogin} disabled={isSubmitting}>
-          {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={s.loginButtonText}>Entrar</Text>
-          )}
+        <TouchableOpacity style={s.loginButton} onPress={handleLogin}>
+          <Text style={s.loginButtonText}>Entrar</Text>
         </TouchableOpacity>
         <TouchableOpacity style={s.registerLink} onPress={() => router.push("/auth/cadastro-usuario")}>
           <Text style={s.registerLinkText}>Ainda não tem conta? <Text style={s.registerLinkHighlight}>Cadastre-se</Text></Text>
@@ -79,6 +99,7 @@ export default function LoginScreen() {
 function makeStyles(colors: any) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background, padding: 24, justifyContent: "center" },
+    centerContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background },
     header: { alignItems: "center", marginBottom: 48 },
     logo: { width: 100, height: 100, marginBottom: 16 },
     title: { fontSize: 32, fontWeight: "bold", color: colors.text },
@@ -94,7 +115,6 @@ function makeStyles(colors: any) {
       backgroundColor: colors.inputBackground, borderRadius: 12, padding: 16,
       fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border,
     },
-    errorText: { color: "red", marginBottom: 12, textAlign: "center", fontSize: 14 },
     loginButton: {
       backgroundColor: "#4f46e5", borderRadius: 12, padding: 16, alignItems: "center",
       marginTop: 8, shadowColor: "#4f46e5", shadowOffset: { width: 0, height: 4 },

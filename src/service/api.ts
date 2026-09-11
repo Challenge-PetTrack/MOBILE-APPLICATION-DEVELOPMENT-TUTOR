@@ -1,40 +1,39 @@
-import axios from 'axios';
-import { storage } from './storage';
+// src/services/api.ts
+const BASE_URL = "http://10.0.2.2:8080"; // emulador Android
+// const BASE_URL = "http://localhost:8080"; // dispositivo físico na mesma rede
 
-// Emulador Android: 10.0.2.2 aponta para localhost da máquina host
-// Dispositivo físico: trocar para o IP local da máquina (ex: 192.168.x.x)
-const BASE_URL = 'http://10.0.2.2:8080';
-
-const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
+export const api = {
+  get: async (endpoint: string) => {
+    const response = await fetch(`${BASE_URL}${endpoint}`);
+    if (!response.ok) throw new Error(`Erro: ${response.status}`);
+    return response.json();
   },
-});
 
-// ─── Interceptor de REQUEST: injeta token JWT ────────────────────────────────
-api.interceptors.request.use(
-  async (config) => {
-    const session = await storage.getSession();
-    if (session?.token) {
-      config.headers.Authorization = `Bearer ${session.token}`;
-    }
-    return config;
+  post: async (endpoint: string, body: object) => {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Erro: ${response.status}`);
+    return response.json();
   },
-  (error) => Promise.reject(error),
-);
 
-// ─── Interceptor de RESPONSE: trata erros globais ───────────────────────────
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      // Token expirado ou inválido — limpa sessão local
-      await storage.clearSession();
-    }
-    return Promise.reject(error);
+  put: async (endpoint: string, body: object) => {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Erro: ${response.status}`);
+    return response.json();
   },
-);
 
-export default api;
+  delete: async (endpoint: string) => {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error(`Erro: ${response.status}`);
+    return response.json();
+  },
+};
