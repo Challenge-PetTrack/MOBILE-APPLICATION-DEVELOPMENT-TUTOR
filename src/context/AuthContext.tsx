@@ -44,9 +44,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
 
-  // ── 1. Restaurar sessão persistida ─────────────────────────────────────
+  // ── 1. Restaurar sessão persistida (Firebase + Storage) ────────────────
   useEffect(() => {
-    loadSession();
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
+        if (firebaseUser) {
+          const session = await storage.getSession();
+          const token = await firebaseUser.getIdToken();
+          const loggedUser: User = {
+            id: firebaseUser.uid.charCodeAt(0) % 10000,
+            nome: firebaseUser.displayName || session?.nome || '',
+            email: firebaseUser.email || '',
+            perfil: session?.perfil || 'tutor',
+            uid: firebaseUser.uid,
+          };
+          setUser(loggedUser);
+          setToken(token);
+
+          // Manter o storage atualizado caso tenha havido mudanças
+          await storage.saveSession({ ...loggedUser, token });
+        } else {
+          setUser(null);
+          setToken(null);
+        }
+      } catch (e) {
+        console.error('Erro ao restaurar sessão Firebase:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // ── 2. Proteção reativa de rotas ───────────────────────────────────────
@@ -63,27 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace(user.perfil === 'veterinario' ? '/vet/home' : '/tutor/home');
     }
   }, [user, segments, isLoading]);
-
-  // ── Funções ────────────────────────────────────────────────────────────
-
-  const loadSession = async () => {
-    try {
-      const session = await storage.getSession();
-      if (session?.token && session?.id) {
-        setUser({
-          id: session.id,
-          nome: session.nome,
-          email: session.email,
-          perfil: session.perfil,
-        });
-        setToken(session.token);
-      }
-    } catch (e) {
-      console.error('Erro ao restaurar sessão:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // ── Login via Firebase Auth ────────────────────────────────────────────
   const login = async (email: string, senha: string) => {

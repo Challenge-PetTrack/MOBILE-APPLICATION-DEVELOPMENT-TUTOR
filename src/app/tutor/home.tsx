@@ -109,7 +109,8 @@ export default function TutorHome() {
             </TouchableOpacity>
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
-              await storage.clearSession();
+              const authContext = require("@/hooks/useAuth").useAuth;
+              await authContext().logout();
               router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />
