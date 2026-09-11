@@ -4,12 +4,13 @@ import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
-import { storage } from "@/service/storage";
+import { useAuth } from "@/hooks/useAuth";
 import LottieView from "lottie-react-native";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { login, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(true);
@@ -23,29 +24,20 @@ export default function LoginScreen() {
         router.replace("/auth/onboarding");
         return;
       }
-
-      const session = await AsyncStorage.getItem("@session");
-      if (session) {
-        const user = JSON.parse(session);
-        if (user.perfil === "veterinario") router.replace("/vet/home");
-        else router.replace("/tutor/home");
-      } else setLoading(false);
-    } catch (e) { setLoading(false); }
+    } catch (e) { /* ignore */ }
+    setLoading(false);
   };
 
   const handleLogin = async () => {
     if (!email || !senha) { Alert.alert("Erro", "Preencha todos os campos."); return; }
     try {
       setLoading(true);
-      const usersData = await AsyncStorage.getItem("@users");
-      const users = usersData ? JSON.parse(usersData) : [];
-      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase().trim() && u.senha === senha);
-      if (user) {
-        await storage.saveSession(user);
-        if (user.perfil === "veterinario") router.replace("/vet/home");
-        else router.replace("/tutor/home");
-      } else { setLoading(false); Alert.alert("Erro", "E-mail ou senha inválidos."); }
-    } catch (e) { setLoading(false); Alert.alert("Erro", "Falha ao realizar login."); }
+      await login(email.toLowerCase().trim(), senha);
+      // O AuthContext redireciona automaticamente via useEffect após setar o user
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert("Erro", "E-mail ou senha inválidos.");
+    }
   };
 
   const s = makeStyles(colors);
