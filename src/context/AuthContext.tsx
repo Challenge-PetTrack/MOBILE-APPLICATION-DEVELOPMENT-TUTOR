@@ -1,17 +1,23 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { storage } from '@/service/storage';
-import { authService, RegisterRequest } from '@/service/authService';
-import { tutorService } from '@/service/tutorService';
+import { RegisterRequest } from '@/service/authService';
 import { auth } from '@/config/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
+
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface User {
   id: number;
   nome: string;
   email: string;
   perfil: 'tutor' | 'veterinario';
-  uid?: string; // Firebase UID
+  uid?: string;
 }
 
 interface AuthContextData {
@@ -24,7 +30,11 @@ interface AuthContextData {
   logout: () => Promise<void>;
 }
 
+// ─── Context ───────────────────────────────────────────────────────────────
+
 export const AuthContext = createContext<AuthContextData>({} as AuthContextData);
+
+// ─── Provider ──────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -34,10 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
 
+  // ── 1. Restaurar sessão persistida ─────────────────────────────────────
   useEffect(() => {
     loadSession();
   }, []);
 
+  // ── 2. Proteção reativa de rotas ───────────────────────────────────────
   useEffect(() => {
     if (isLoading) return;
 
@@ -48,13 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user && (inTutorGroup || inVetGroup)) {
       router.replace('/auth/login');
     } else if (user && inAuthGroup) {
-      if (user.perfil === 'veterinario') {
-        router.replace('/vet/home');
-      } else {
-        router.replace('/tutor/home');
-      }
+      router.replace(user.perfil === 'veterinario' ? '/vet/home' : '/tutor/home');
     }
   }, [user, segments, isLoading]);
+
+  // ── Funções ────────────────────────────────────────────────────────────
 
   const loadSession = async () => {
     try {
@@ -75,93 +85,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // ── Login via Firebase Auth ────────────────────────────────────────────
   const login = async (email: string, senha: string) => {
-    try {
-      // Mock para desenvolvimento visual se o Firebase não estiver configurado
-      if (auth.app.options.apiKey === "AIzaSy_YOUR_API_KEY") {
-        console.warn("Usando Login Mockado (Firebase não configurado)");
-        const mockUser = {
-          id: Math.floor(Math.random() * 1000),
-          nome: 'Tutor Teste',
-          email: email,
-          perfil: 'tutor' as const,
-          uid: 'mock-uid-123'
-        };
-        await storage.saveSession({ ...mockUser, token: 'mock-token' });
-        setToken('mock-token');
-        setUser(mockUser);
-        return;
-      }
+    // 1. Autenticar no Firebase
+    const credential = await signInWithEmailAndPassword(auth, email, senha);
+    const firebaseToken = await credential.user.getIdToken();
 
-      // 1. Autenticar no Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
-      const firebaseToken = await userCredential.user.getIdToken();
-      
-      // 2. Tentar buscar o ID no Java Backend (ignora se estiver offline)
-      let usuarioLogado = {
-        id: Math.floor(Math.random() * 1000), // ID mock para testes visuais
-        nome: 'Tutor Firebase',
-        email: email,
-        perfil: 'tutor' as const,
-        uid: userCredential.user.uid
-      };
+    // 2. Montar dados do usuário a partir do Firebase
+    //    O displayName é salvo no momento do cadastro.
+    //    O campo "perfil" é armazenado em customClaims via Firebase ou em AsyncStorage.
+    const displayName = credential.user.displayName || email.split('@')[0];
 
-      try {
-        const tutores = await tutorService.getAll();
-        const tutor = tutores.data.find(t => t.email === email);
-        if (tutor) {
-           usuarioLogado.id = tutor.id || usuarioLogado.id;
-           usuarioLogado.nome = tutor.nome;
-        }
-      } catch (backendError) {
-        console.warn('Backend Java offline, usando dados mockados de Tutor.');
-      }
+    // 3. Tentar recuperar perfil salvo localmente (definido no cadastro)
+    const savedSession = await storage.getSession();
+    const perfil: 'tutor' | 'veterinario' =
+      (savedSession?.email === email ? savedSession?.perfil : null) ?? 'tutor';
 
-      // 3. Salvar sessão local
-      await storage.saveSession({ ...usuarioLogado, token: firebaseToken });
-      setToken(firebaseToken);
-      setUser(usuarioLogado);
-      
-    } catch (error) {
-      console.error('Erro no login Firebase:', error);
-      throw error;
-    }
+    const loggedUser: User = {
+      id: credential.user.uid.charCodeAt(0) % 10000, // ID numérico derivado do UID
+      nome: displayName,
+      email: credential.user.email ?? email,
+      perfil: perfil,
+      uid: credential.user.uid,
+    };
+
+    // 4. Persistir sessão
+    await storage.saveSession({ ...loggedUser, token: firebaseToken });
+    setToken(firebaseToken);
+    setUser(loggedUser);
+    // AuthContext redireciona automaticamente via useEffect de segmentos
   };
 
+  // ── Cadastro via Firebase Auth ─────────────────────────────────────────
   const register = async (data: RegisterRequest) => {
-    try {
-      // Mock para desenvolvimento visual se o Firebase não estiver configurado
-      if (auth.app.options.apiKey === "AIzaSy_YOUR_API_KEY") {
-        console.warn("Usando Register Mockado (Firebase não configurado)");
-        return; // Apenas sai com sucesso para permitir que a tela mude
-      }
+    // 1. Criar conta no Firebase Authentication
+    const credential = await createUserWithEmailAndPassword(auth, data.email, data.senha);
 
-      // 1. Criar usuário no Firebase
-      await createUserWithEmailAndPassword(auth, data.email, data.senha);
-      
-      // 2. Criar usuário no Java Backend para gerar o ID numérico (tutorId)
-      if (data.perfil === 'tutor') {
-         try {
-           await tutorService.create({
-              nome: data.nome,
-              email: data.email,
-              telefone: data.telefone || '',
-           });
-         } catch (e) {
-           console.warn('Backend Java offline, usuário criado apenas no Firebase.');
-         }
-      }
-    } catch (error) {
-      console.error('Erro no cadastro Firebase:', error);
-      throw error;
-    }
+    // 2. Salvar perfil localmente para uso no login futuro
+    //    (Firebase não suporta campos customizados sem Functions, então guardamos no storage)
+    const newUser: User = {
+      id: credential.user.uid.charCodeAt(0) % 10000,
+      nome: data.nome,
+      email: data.email,
+      perfil: data.perfil,
+      uid: credential.user.uid,
+    };
+
+    const firebaseToken = await credential.user.getIdToken();
+    await storage.saveSession({ ...newUser, token: firebaseToken });
   };
 
+  // ── Logout ──────────────────────────────────────────────────────────────
   const logout = async () => {
     try {
       await signOut(auth);
     } catch (e) {
-      console.error(e);
+      console.warn('Erro no signOut Firebase:', e);
     }
     await storage.clearSession();
     setToken(null);
