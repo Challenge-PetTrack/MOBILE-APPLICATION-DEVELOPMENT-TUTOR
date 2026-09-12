@@ -108,6 +108,3 @@ Este projeto foi desenvolvido com fins acadêmicos para a **FIAP (Turma 2TDS)**.
 | **Thiago Rodrigues da Mota** | RM 563650 |
 
 <br/>
-<div align="center">
-  <sub>Vai Corinthians!</sub>
-</div>
