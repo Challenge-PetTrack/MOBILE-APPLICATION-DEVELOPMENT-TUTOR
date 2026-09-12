@@ -13,11 +13,6 @@ export default function TutoresVet() {
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadTutores();
-    }, [])
-  );
 
   const loadTutores = async () => {
     try {
@@ -35,6 +30,12 @@ export default function TutoresVet() {
       setLoading(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTutores();
+    }, [])
+  );
 
   const handleBusca = (text: string) => {
     setBusca(text);

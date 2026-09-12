@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, Tex
 import { useState, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useAuth } from "@/hooks/useAuth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import ActionCard from "@/components/ActionCard";
@@ -9,6 +10,7 @@ import { storage } from "@/service/storage";
 
 export default function VetHome() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { colors, isDark } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
   const [consultas, setConsultas] = useState<any[]>([]);
@@ -24,12 +26,6 @@ export default function VetHome() {
   const [resultados, setResultados] = useState<any[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [buscaFeita, setBuscaFeita] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
 
   const loadData = async () => {
     try {
@@ -72,6 +68,12 @@ export default function VetHome() {
       console.error(e);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleBuscar = async () => {
     if (!busca.trim()) return;
@@ -312,8 +314,7 @@ export default function VetHome() {
             ))}
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
-              const authContext = require("@/hooks/useAuth").useAuth;
-              await authContext().logout();
+              await logout();
               router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />

@@ -15,11 +15,6 @@ export default function FinanceiroVet() {
   const [valorPadrão, setValorPadrao] = useState(150);
   const [consultasList, setConsultasList] = useState<any[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
 
   const loadData = async () => {
     try {
@@ -52,6 +47,12 @@ export default function FinanceiroVet() {
       console.error(e);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const currentMonthName = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 

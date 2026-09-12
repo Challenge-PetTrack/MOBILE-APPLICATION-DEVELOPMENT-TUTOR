@@ -23,11 +23,6 @@ export default function AjustesVet() {
   const [enderecoClinica, setEnderecoClinica] = useState("");
   const [valorConsulta, setValorConsulta] = useState("150");
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
 
   const loadData = async () => {
     const sessionStr = await AsyncStorage.getItem("@session");
@@ -46,6 +41,12 @@ export default function AjustesVet() {
     const notif = await AsyncStorage.getItem("@settings_notificacoes");
     if (notif !== null) setNotificacoes(notif === "true");
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const salvarPerfil = async () => {
     try {

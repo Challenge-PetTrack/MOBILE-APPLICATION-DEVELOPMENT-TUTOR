@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const router = useRouter();
   const segments = useSegments();
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── 2. Proteção reativa de rotas ───────────────────────────────────────
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isRegistering) return;
 
     const inAuthGroup = segments[0] === 'auth';
     const inTutorGroup = segments[0] === 'tutor';
@@ -90,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (user && inAuthGroup) {
       router.replace(user.perfil === 'veterinario' ? '/vet/home' : '/tutor/home');
     }
-  }, [user, segments, isLoading]);
+  }, [user, segments, isLoading, isRegistering]);
 
   // ── Login via Firebase Auth ────────────────────────────────────────────
   const login = async (email: string, senha: string) => {
@@ -125,21 +126,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Cadastro via Firebase Auth ─────────────────────────────────────────
   const register = async (data: RegisterRequest) => {
-    // 1. Criar conta no Firebase Authentication
-    const credential = await createUserWithEmailAndPassword(auth, data.email, data.senha);
+    try {
+      setIsRegistering(true);
+      // 1. Criar conta no Firebase Authentication
+      const credential = await createUserWithEmailAndPassword(auth, data.email, data.senha);
 
-    // 2. Salvar perfil localmente para uso no login futuro
-    //    (Firebase não suporta campos customizados sem Functions, então guardamos no storage)
-    const newUser: User = {
-      id: credential.user.uid.charCodeAt(0) % 10000,
-      nome: data.nome,
-      email: data.email,
-      perfil: data.perfil,
-      uid: credential.user.uid,
-    };
+      // 2. Fazer signout imediatamente, já que o Firebase faz auto-login
+      await signOut(auth);
 
-    const firebaseToken = await credential.user.getIdToken();
-    await storage.saveSession({ ...newUser, token: firebaseToken });
+      // 3. Salvar perfil localmente para uso no login futuro
+      const newUser: User = {
+        id: credential.user.uid.charCodeAt(0) % 10000,
+        nome: data.nome,
+        email: data.email,
+        perfil: data.perfil,
+        uid: credential.user.uid,
+      };
+
+      // Nós removemos a sessão atual para garantir que o usuário precise logar manualmente
+      await storage.saveSession(newUser);
+      setToken(null);
+      setUser(null);
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   // ── Logout ──────────────────────────────────────────────────────────────

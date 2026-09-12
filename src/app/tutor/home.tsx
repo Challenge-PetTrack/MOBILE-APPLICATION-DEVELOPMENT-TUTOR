@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } fr
 import { useState, useCallback } from "react";
 import { Image } from "expo-image";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useAuth } from "@/hooks/useAuth";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/context/ThemeContext";
 import ActionCard from "@/components/ActionCard";
@@ -9,6 +10,7 @@ import { storage } from "@/service/storage";
 
 export default function TutorHome() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { colors, isDark } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
   const [userName, setUserName] = useState("tutor");
@@ -109,8 +111,7 @@ export default function TutorHome() {
             </TouchableOpacity>
 
             <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
-              const authContext = require("@/hooks/useAuth").useAuth;
-              await authContext().logout();
+              await logout();
               router.replace("/auth/login");
             }}>
               <Ionicons name="log-out-outline" size={24} color="#ef4444" />
