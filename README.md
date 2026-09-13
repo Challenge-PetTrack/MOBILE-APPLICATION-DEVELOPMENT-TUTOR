@@ -41,7 +41,7 @@ Esta versão do aplicativo marca a integração completa com a API Java (Backend
 * **Autenticação Real (JWT):** O fluxo de login e cadastro bate na API real e o token é gerenciado via `AuthContext` com interceptors do `axios`.
 * **Proteção de Rotas Eficiente:** Bloqueio direto nos `_layout.tsx` do `expo-router` e bloqueio imediato pós-logout.
 
-> **Vídeo de Demonstração (YouTube):** [Cole o Link Aqui]
+> **Vídeo de Demonstração (YouTube):** [Assistir no YouTube](https://youtu.be/m7xLWDiZS-o?si=J_YzZHFyeTqDLjfu)
 
 ---
 
@@ -55,7 +55,7 @@ src/
 │   ├── _layout.tsx              # Providers: QueryClient, Auth, Theme
 │   ├── index.tsx                # Dispatcher de Sessão
 │   ├── (auth)/                  # 🔓 Telas deslogadas (Login API)
-│   ├── (tutor)/                 # 🧑‍🦱 Telas protegidas do Tutor
+│   ├── (tutor)/                 # 🧑🦱 Telas protegidas do Tutor
 │   │   └── _layout.tsx          # Guard de Rota
 │   └── (vet)/                   # 🩺 Telas protegidas do Veterinário
 │       └── _layout.tsx          # Guard de Rota
@@ -64,47 +64,3 @@ src/
 ├── context/                     # 🧠 AuthContext (Token) e ThemeContext
 ├── hooks/                       # 🪝 Camada de Lógica (usePets, useMedicamentos)
 └── service/                     # 🌐 Camada HTTP (Axios + JWT interceptors)
-```
-
----
-
-## 🚀 Como Rodar o Projeto
-
-### Pré-requisitos
-1. **API Java:** O projeto [JAVA-ADVANCED](https://github.com/Challenge-PetTrack/JAVA-ADVANCED) deve estar rodando em sua máquina local na porta `8080`.
-2. **Ambiente Mobile:** Node.js (v20+) e aplicativo Expo Go no celular (ou Emulador Android).
-
-### Instalação
-1. Clone o repositório:
-   ```bash
-   git clone https://github.com/Challenge-PetTrack/MOBILE-APPLICATION-DEVELOPMENT-TUTOR.git
-   cd MOBILE-APPLICATION-DEVELOPMENT-TUTOR
-   ```
-2. Instale as dependências:
-   ```bash
-   npm install
-   ```
-
-### Levantando voo 🦅
-Se você usa emulador Android, a conexão com `http://10.0.2.2:8080` funcionará de primeira.
-Se for testar via celular físico (Expo Go), você deve editar o IP em `src/service/api.ts` para o IP IPv4 da sua máquina (ex: `http://192.168.0.10:8080`).
-
-```bash
-npx expo start -c
-```
-Pressione `a` para abrir no emulador Android local, ou leia o QR Code no seu celular conectado na mesma rede Wi-Fi.
-
----
-
-## 🎓 Desenvolvedores (Equipe)
-
-Este projeto foi desenvolvido com fins acadêmicos para a **FIAP (Turma 2TDS)**.
-
-| Nome | RM |
-| :--- | :--- |
-| **Gabriel Sbrana Campos** | RM 565849 |
-| **Moisés Waidemann Molinillo Júnior** | RM 563719 |
-| **Richard Freitas** | RM 566127 |
-| **Thiago Rodrigues da Mota** | RM 563650 |
-
-<br/>
