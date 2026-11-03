@@ -1,237 +1,257 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from "react-native";
-import { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+} from "react-native";
+import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "@/context/ThemeContext";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
+import Header from "@/components/Header";
+import PetSelectorBar from "@/components/PetSelectorBar";
+import { useTheme, type ThemeColors } from "@/context/ThemeContext";
+import { useAllPets } from "@/hooks/usePets";
+import { useClinicaVet } from "@/hooks/useClinica";
+import { useRegistrarAtendimentoVet } from "@/hooks/useConsultas";
+import { parseCurrency } from "@/utils/currency";
+import type { Pet } from "@/types/models";
 
-export default function NovaConsulta() {
+const EMPTY_PETS: Pet[] = [];
+
+export default function NovaConsultaScreen() {
   const router = useRouter();
+  const { petId: initialPetId } = useLocalSearchParams<{ petId?: string }>();
   const { colors } = useTheme();
   const s = makeStyles(colors);
 
-  const [petNome, setPetNome] = useState("");
-  const [tutorNome, setTutorNome] = useState("");
+  const petsQuery = useAllPets();
+  const clinicaQuery = useClinicaVet();
+  const registrarAtendimento = useRegistrarAtendimentoVet();
+
+  const pets = petsQuery.data ?? EMPTY_PETS;
+  const [selectedPetId, setSelectedPetId] = useState<string | null>(initialPetId ?? null);
+  const [manualPetNome, setManualPetNome] = useState("");
+  const [manualTutorNome, setManualTutorNome] = useState<string | null>(null);
   const [diagnostico, setDiagnostico] = useState("");
   const [prescricao, setPrescricao] = useState("");
+  const [valorEditado, setValorEditado] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const selectedPet = useMemo(
+    () => pets.find((p) => p.id === selectedPetId) ?? null,
+    [pets, selectedPetId]
+  );
+
+  const petNome = selectedPet ? selectedPet.nome : manualPetNome;
+  const tutorNome = manualTutorNome ?? (selectedPet ? selectedPet.tutorNome : "");
+  const valor =
+    valorEditado ??
+    (clinicaQuery.data?.valorConsulta ? String(clinicaQuery.data.valorConsulta) : "");
+
+  const handleSelectPet = (id: string) => {
+    const nextId = selectedPetId === id ? null : id;
+    setSelectedPetId(nextId);
+    const found = pets.find((p) => p.id === nextId);
+    if (found) {
+      setManualPetNome(found.nome);
+      setManualTutorNome(found.tutorNome);
+    } else {
+      setManualTutorNome(null);
+    }
+  };
+
   const handleSalvar = async () => {
-    if (!petNome.trim() || !diagnostico.trim()) {
-      Alert.alert("Atenção", "Preencha pelo menos o nome do pet e o diagnóstico.");
+    const finalPetNome = selectedPet?.nome || petNome.trim();
+    if (!finalPetNome || !diagnostico.trim()) {
+      Alert.alert("Atenção", "Preencha pelo menos o paciente e o diagnóstico clínico.");
       return;
     }
 
-    try {
-      const sessionStr = await AsyncStorage.getItem("@session");
-      if (!sessionStr) {
-        Alert.alert("Erro", "Sessão inválida.");
-        return;
-      }
-      const user = JSON.parse(sessionStr);
+    const parsedValor = parseCurrency(valor);
 
-      const novaConsulta = {
-        id: Date.now().toString(),
-        vetId: user.id,
-        petNome,
+    try {
+      await registrarAtendimento.mutateAsync({
+        pet: selectedPet,
+        petNome: finalPetNome,
         tutorNome,
         diagnostico,
         prescricao,
-        data: new Date().toISOString()
-      };
-
-      const existingData = await AsyncStorage.getItem("@consultas");
-      const consultas = existingData ? JSON.parse(existingData) : [];
-      consultas.push(novaConsulta);
-
-      await AsyncStorage.setItem("@consultas", JSON.stringify(consultas));
+        valor: Number.isFinite(parsedValor) && parsedValor > 0 ? parsedValor : undefined,
+      });
 
       setShowSuccess(true);
       setTimeout(() => {
+        setShowSuccess(false);
         router.back();
-      }, 2500);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Erro", "Falha ao salvar consulta.");
+      }, 1800);
+    } catch {
+      Alert.alert("Erro", "Não foi possível salvar o atendimento.");
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView style={s.container} contentContainerStyle={s.contentContainer}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={s.title}>Nova Consulta</Text>
-          <View style={{ width: 40 }} />
-        </View>
+      <Header title="Novo Atendimento" />
 
-        <View style={s.form}>
-          <View style={s.inputGroup}>
-            <Text style={s.label}>Nome do Pet Paciente</Text>
-            <TextInput 
-              style={s.input} 
-              placeholder="Ex: Rex" 
-              placeholderTextColor={colors.textMuted}
-              value={petNome}
-              onChangeText={setPetNome}
-            />
-          </View>
+      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+        {pets.length > 0 && (
+          <>
+            <Text style={s.sectionLabel}>Selecionar Paciente Cadastrado (opcional)</Text>
+            <View style={{ marginHorizontal: -24 }}>
+              <PetSelectorBar
+                pets={pets}
+                selectedPetId={selectedPetId}
+                onSelect={handleSelectPet}
+                accentColor="#0d9488"
+              />
+            </View>
+          </>
+        )}
 
-          <View style={s.inputGroup}>
-            <Text style={s.label}>Nome do Tutor</Text>
-            <TextInput 
-              style={s.input} 
-              placeholder="Ex: João da Silva" 
-              placeholderTextColor={colors.textMuted}
-              value={tutorNome}
-              onChangeText={setTutorNome}
-            />
-          </View>
+        <View style={s.formCard}>
+          <Text style={s.label}>Nome do Paciente *</Text>
+          <TextInput
+            style={s.input}
+            placeholder="Ex.: Rex"
+            placeholderTextColor={colors.textMuted}
+            value={petNome}
+            onChangeText={(txt) => {
+              setSelectedPetId(null);
+              setManualPetNome(txt);
+            }}
+          />
 
-          <View style={s.inputGroup}>
-            <Text style={s.label}>Diagnóstico / Motivo</Text>
-            <TextInput 
-              style={[s.input, s.textArea]} 
-              placeholder="Descreva o quadro clínico..." 
-              placeholderTextColor={colors.textMuted}
-              multiline={true}
-              numberOfLines={4}
-              value={diagnostico}
-              onChangeText={setDiagnostico}
-            />
-          </View>
+          <Text style={s.label}>Nome do Tutor</Text>
+          <TextInput
+            style={s.input}
+            placeholder="Ex.: Maria Silva"
+            placeholderTextColor={colors.textMuted}
+            value={tutorNome}
+            onChangeText={setManualTutorNome}
+          />
 
-          <View style={s.inputGroup}>
-            <Text style={s.label}>Prescrição (Medicamentos)</Text>
-            <TextInput 
-              style={[s.input, s.textArea]} 
-              placeholder="Descreva os medicamentos e dosagens..." 
-              placeholderTextColor={colors.textMuted}
-              multiline={true}
-              numberOfLines={4}
-              value={prescricao}
-              onChangeText={setPrescricao}
-            />
-          </View>
+          <Text style={s.label}>Diagnóstico Clínico *</Text>
+          <TextInput
+            style={[s.input, s.textArea]}
+            placeholder="Descreva os achados clínicos e o diagnóstico..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+            value={diagnostico}
+            onChangeText={setDiagnostico}
+          />
 
-          <TouchableOpacity style={s.button} onPress={handleSalvar}>
-            <Text style={s.buttonText}>Registrar Consulta</Text>
+          <Text style={s.label}>Prescrição / Recomendações</Text>
+          <TextInput
+            style={[s.input, s.textArea]}
+            placeholder="Medicamentos, doses e orientações ao tutor..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+            value={prescricao}
+            onChangeText={setPrescricao}
+          />
+
+          <Text style={s.label}>Valor Cobrado (R$)</Text>
+          <TextInput
+            style={s.input}
+            placeholder="150,00"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            value={valor}
+            onChangeText={setValorEditado}
+          />
+
+          <TouchableOpacity
+            style={s.submitBtn}
+            onPress={handleSalvar}
+            disabled={registrarAtendimento.isPending}
+          >
+            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+            <Text style={s.submitText}>
+              {registrarAtendimento.isPending
+                ? "Registrando..."
+                : "Finalizar e Salvar Prontuário"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {showSuccess && (
-        <View style={StyleSheet.absoluteFillObject}>
-          <View style={s.successOverlay} />
-          <LottieView
-            source={{ uri: "https://lottie.host/e2d091db-a3eb-4601-bd08-9df81bdf9fc6/A2x5uKofgK.json" }}
-            autoPlay
-            loop={false}
-            style={s.lottieAnim}
-          />
+      <Modal visible={showSuccess} transparent animationType="fade">
+        <View style={s.successOverlay}>
+          <View style={s.successBox}>
+            <LottieView
+              source={{
+                uri: "https://lottie.host/7833bdc6-ccb3-4f93-b6d3-24151a66ccbc/hOmsaI1J3u.json",
+              }}
+              autoPlay
+              loop={false}
+              style={{ width: 120, height: 120 }}
+            />
+            <Text style={s.successTitle}>Atendimento Registrado!</Text>
+            <Text style={s.successSub}>O prontuário já está disponível para o tutor.</Text>
+          </View>
         </View>
-      )}
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-const makeStyles = (colors: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  contentContainer: {
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 32,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: colors.text,
-  },
-  form: {
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: colors.inputBackground,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
-  },
-  button: {
-    backgroundColor: "#0d9488", // Teal do Vet
-    borderRadius: 16,
-    padding: 18,
-    alignItems: "center",
-    marginTop: 12,
-    shadowColor: "#0d9488",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  successOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-  },
-  lottieAnim: {
-    width: "100%",
-    height: "100%",
-    position: "absolute",
-    zIndex: 1000,
-  },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    content: { paddingHorizontal: 24, paddingBottom: 40 },
+    sectionLabel: { fontSize: 14, fontWeight: "700", color: colors.text, marginBottom: 10 },
+    formCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+      padding: 22,
+      elevation: 2,
+    },
+    label: { fontSize: 13, fontWeight: "600", color: colors.textSecondary, marginBottom: 6 },
+    input: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 15,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
+    },
+    textArea: { height: 96, textAlignVertical: "top" },
+    submitBtn: {
+      backgroundColor: "#0d9488",
+      borderRadius: 14,
+      paddingVertical: 16,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+    },
+    submitText: { color: "#fff", fontSize: 15, fontWeight: "bold" },
+    successOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    successBox: {
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      padding: 28,
+      alignItems: "center",
+      width: "85%",
+    },
+    successTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginTop: 8 },
+    successSub: { fontSize: 14, color: colors.textSecondary, marginTop: 4, textAlign: "center" },
+  });
+}

@@ -1,257 +1,182 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert, TextInput, Image, ActivityIndicator } from "react-native";
-import { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  TextInput,
+  Image,
+} from "react-native";
+import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
-import { useAuth } from "@/hooks/useAuth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "@/context/ThemeContext";
+import { useRouter } from "expo-router";
 import ActionCard from "@/components/ActionCard";
-import { storage } from "@/service/storage";
+import { useAuth } from "@/hooks/useAuth";
+import { useAllPets } from "@/hooks/usePets";
+import { useVetDashboardMetrics } from "@/hooks/useClinica";
+import { useContactWhatsApp } from "@/hooks/useTutores";
+import { useTheme, type ThemeColors } from "@/context/ThemeContext";
+import { formatCurrency } from "@/utils/currency";
+import { formatDate } from "@/utils/date";
 
-export default function VetHome() {
+export default function VetHomeScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { colors, isDark } = useTheme();
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [consultas, setConsultas] = useState<any[]>([]);
-  const [agendaBadge, setAgendaBadge] = useState(0);
-  const [vetName, setVetName] = useState("Doutor(a)");
-  
-  // Dashboard Metrics
-  const [consultasMes, setConsultasMes] = useState(0);
-  const [faturamento, setFaturamento] = useState(0);
-
-  // Busca de Pacientes
-  const [busca, setBusca] = useState("");
-  const [resultados, setResultados] = useState<any[]>([]);
-  const [buscando, setBuscando] = useState(false);
-  const [buscaFeita, setBuscaFeita] = useState(false);
-
-  const loadData = async () => {
-    try {
-      const session = await storage.getSession();
-      if (!session) return;
-      const user = session;
-      if (user.nome) setVetName(user.nome.split(" ")[0]);
-
-      const clinicaStr = await AsyncStorage.getItem("@clinica_dados");
-      const valorConsulta = clinicaStr ? parseFloat(JSON.parse(clinicaStr).valorConsulta || "150") : 150;
-
-      const data = await AsyncStorage.getItem("@consultas");
-      if (data) {
-        const all = JSON.parse(data);
-        const doVet = all.filter((c: any) => c.vetId === user.id);
-        setConsultas(doVet.reverse());
-
-        // Calcular métricas do mês atual
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        
-        const consultasEsteMes = doVet.filter((c: any) => {
-          const d = new Date(c.data);
-          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        });
-
-        setConsultasMes(consultasEsteMes.length);
-        setFaturamento(consultasEsteMes.length * valorConsulta);
-      }
-
-      const agendaData = await AsyncStorage.getItem("@agenda_consultas");
-      const agendaVisto = await AsyncStorage.getItem("@agenda_visto_count");
-      if (agendaData) {
-        const agenda = JSON.parse(agendaData);
-        const total = agenda.length;
-        const visto = agendaVisto ? parseInt(agendaVisto) : 0;
-        setAgendaBadge(Math.max(0, total - visto));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
-
-  const handleBuscar = async () => {
-    if (!busca.trim()) return;
-    try {
-      setBuscando(true);
-      setBuscaFeita(false);
-
-      // Buscar em todos os pets cadastrados
-      const petsData = await AsyncStorage.getItem("@pets");
-      const usersData = await AsyncStorage.getItem("@users");
-      const pets = petsData ? JSON.parse(petsData) : [];
-      const users = usersData ? JSON.parse(usersData) : [];
-
-      const encontrados = pets.filter((p: any) =>
-        p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
-        p.especie?.toLowerCase().includes(busca.toLowerCase()) ||
-        p.raca?.toLowerCase().includes(busca.toLowerCase())
-      );
-
-      // Enriquecer com dados do tutor
-      const enriquecidos = encontrados.map((p: any) => {
-        const tutor = users.find((u: any) => u.id === p.userId);
-        return { ...p, tutorNome: tutor?.nome || "Tutor não encontrado", tutorTel: tutor?.telefone };
-      });
-
-      setResultados(enriquecidos);
-      setBuscaFeita(true);
-    } catch (e) {
-      Alert.alert("Erro", "Falha ao realizar busca.");
-    } finally {
-      setBuscando(false);
-    }
-  };
-
-  const limparBusca = () => {
-    setBusca("");
-    setResultados([]);
-    setBuscaFeita(false);
-  };
-
-  const handleAgendaPress = async () => {
-    const agendaData = await AsyncStorage.getItem("@agenda_consultas");
-    if (agendaData) {
-      const agenda = JSON.parse(agendaData);
-      await AsyncStorage.setItem("@agenda_visto_count", agenda.length.toString());
-    }
-    setAgendaBadge(0);
-    router.push("/vet/agenda");
-  };
-
   const s = makeStyles(colors);
+
+  const metrics = useVetDashboardMetrics();
+  const petsQuery = useAllPets();
+  const contactWhatsApp = useContactWhatsApp();
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [busca, setBusca] = useState("");
+
+  const vetFirstName = user?.nome?.split(" ")[0] || "Doutor(a)";
+
+  const resultadosBusca = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return [];
+    return (petsQuery.data ?? []).filter(
+      (p) =>
+        p.nome.toLowerCase().includes(termo) ||
+        p.especie.toLowerCase().includes(termo) ||
+        (p.raca ?? "").toLowerCase().includes(termo) ||
+        p.tutorNome.toLowerCase().includes(termo)
+    );
+  }, [busca, petsQuery.data]);
+
+  const goFromMenu = (path: string) => {
+    setMenuVisible(false);
+    router.push(path as any);
+  };
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.contentContainer}>
       <View style={s.header}>
-        <View style={s.headerText}>
-          <Text style={s.greeting}>Olá, Dr(a). {vetName}!</Text>
-          <Text style={s.subtitle}>Painel do Veterinário</Text>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={s.greeting}>Olá, Dr(a). {vetFirstName}!</Text>
+          <Text style={s.subtitle}>
+            {metrics.clinica?.nome || "Painel Clínico PetTrack"}
+          </Text>
         </View>
-        <TouchableOpacity style={s.menuButton} onPress={() => setMenuVisible(true)}>
+        <TouchableOpacity
+          style={s.menuButton}
+          onPress={() => setMenuVisible(true)}
+          accessibilityLabel="Abrir menu"
+        >
           <Ionicons name="menu" size={28} color={colors.text} />
         </TouchableOpacity>
       </View>
 
-      {/* Barra de Busca Funcional */}
       <View style={s.searchSection}>
         <Text style={s.sectionTitle}>Buscar Paciente</Text>
         <View style={s.searchBar}>
           <Ionicons name="search" size={20} color={colors.textMuted} />
           <TextInput
             style={s.searchInput}
-            placeholder="Nome, espécie ou raça..."
+            placeholder="Nome do pet, raça, espécie ou tutor..."
             placeholderTextColor={colors.textMuted}
             value={busca}
             onChangeText={setBusca}
-            onSubmitEditing={handleBuscar}
-            returnKeyType="search"
           />
           {busca.length > 0 && (
-            <TouchableOpacity onPress={limparBusca}>
+            <TouchableOpacity onPress={() => setBusca("")}>
               <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={s.searchButton} onPress={handleBuscar}>
-            {buscando ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={s.searchButtonText}>Buscar</Text>
-            )}
-          </TouchableOpacity>
         </View>
 
-        {/* Resultados da Busca */}
-        {buscaFeita && (
-          <View style={s.resultadosContainer}>
-            {resultados.length === 0 ? (
-              <View style={s.semResultados}>
-                <Ionicons name="search" size={32} color={colors.textMuted} />
-                <Text style={s.semResultadosText}>Nenhum paciente encontrado para "{busca}"</Text>
-              </View>
+        {busca.trim().length > 0 && (
+          <View style={s.searchResults}>
+            {resultadosBusca.length === 0 ? (
+              <Text style={s.emptyText}>Nenhum paciente encontrado para &ldquo;{busca}&rdquo;.</Text>
             ) : (
-              <>
-                <Text style={s.resultadosCount}>{resultados.length} resultado(s) encontrado(s)</Text>
-                {resultados.map((pet, i) => (
-                  <View key={pet.id || i} style={s.resultadoCard}>
-                    {pet.fotoUri ? (
-                      <Image source={{ uri: pet.fotoUri }} style={s.resultadoFoto} />
-                    ) : (
-                      <View style={s.resultadoFotoPlaceholder}>
-                        <Ionicons name="paw" size={24} color="#0f766e" />
-                      </View>
-                    )}
-                    <View style={s.resultadoInfo}>
-                      <Text style={s.resultadoNome}>{pet.nome}</Text>
-                      <Text style={s.resultadoDetalhe}>{pet.especie}{pet.raca ? ` • ${pet.raca}` : ""}</Text>
-                      <View style={s.resultadoTutor}>
-                        <Ionicons name="person" size={12} color={colors.textMuted} />
-                        <Text style={s.resultadoTutorText}>{pet.tutorNome}</Text>
-                      </View>
+              resultadosBusca.map((pet) => (
+                <View key={pet.id} style={s.patientCard}>
+                  {pet.fotoUri ? (
+                    <Image source={{ uri: pet.fotoUri }} style={s.patientAvatar} />
+                  ) : (
+                    <View style={s.patientAvatarPlaceholder}>
+                      <Ionicons name="paw" size={20} color="#0d9488" />
                     </View>
-                    {pet.idade || pet.peso ? (
-                      <View style={s.resultadoBadges}>
-                        {pet.idade ? <Text style={s.badge}>{pet.idade}a</Text> : null}
-                        {pet.peso ? <Text style={s.badge}>{pet.peso}kg</Text> : null}
-                      </View>
-                    ) : null}
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.patientName}>{pet.nome}</Text>
+                    <Text style={s.patientSub}>
+                      {pet.especie}
+                      {pet.raca ? ` • ${pet.raca}` : ""} • Tutor: {pet.tutorNome}
+                    </Text>
                   </View>
-                ))}
-              </>
+                  {pet.tutorTelefone ? (
+                    <TouchableOpacity
+                      style={s.whatsSmallBtn}
+                      onPress={() =>
+                        contactWhatsApp(
+                          pet.tutorTelefone,
+                          `Olá ${pet.tutorNome}, aqui é Dr(a). ${vetFirstName} pelo PetTrack sobre ${pet.nome}.`
+                        )
+                      }
+                    >
+                      <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={s.attendBtn}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/vet/nova-consulta",
+                        params: { petId: pet.id },
+                      })
+                    }
+                  >
+                    <Text style={s.attendBtnText}>Atender</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
             )}
           </View>
         )}
       </View>
 
-      {/* Dashboard Financeiro (Clicável) */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <Text style={[s.sectionTitle, { marginBottom: 0 }]}>Visão Geral do Mês</Text>
-        <TouchableOpacity onPress={() => router.push("/vet/financeiro")}>
-          <Text style={{ color: "#0d9488", fontWeight: "600", fontSize: 14 }}>Ver Detalhes</Text>
-        </TouchableOpacity>
+      <View style={s.metricsRow}>
+        <View style={[s.metricCard, { backgroundColor: "#0d9488" }]}>
+          <Ionicons name="medkit" size={24} color="#ccfbf1" />
+          <Text style={s.metricNumber}>{metrics.consultasMesCount}</Text>
+          <Text style={s.metricLabel}>Atendimentos no Mês</Text>
+        </View>
+        <View style={[s.metricCard, { backgroundColor: "#4f46e5" }]}>
+          <Ionicons name="cash-outline" size={24} color="#e0e7ff" />
+          <Text style={s.metricNumber}>{formatCurrency(metrics.faturamentoMes)}</Text>
+          <Text style={s.metricLabel}>Faturamento Mensal</Text>
+        </View>
       </View>
-      <TouchableOpacity style={s.dashboardContainer} activeOpacity={0.8} onPress={() => router.push("/vet/financeiro")}>
-        <View style={s.dashCard}>
-          <View style={s.dashIconBox}>
-            <Ionicons name="medical" size={24} color="#0d9488" />
-          </View>
-          <Text style={s.dashValue}>{consultasMes}</Text>
-          <Text style={s.dashLabel}>Consultas Realizadas</Text>
-        </View>
-        
-        <View style={s.dashCard}>
-          <View style={[s.dashIconBox, { backgroundColor: "#10b98120" }]}>
-            <Ionicons name="cash" size={24} color="#10b981" />
-          </View>
-          <Text style={[s.dashValue, { color: "#10b981" }]}>R$ {faturamento.toLocaleString("pt-BR", {minimumFractionDigits: 2})}</Text>
-          <Text style={s.dashLabel}>Faturamento Estimado</Text>
-        </View>
-      </TouchableOpacity>
 
-      {/* Grid de Ações */}
-      <View style={s.actionsGrid}>
-        <ActionCard
-          title="Nova Consulta"
-          iconName="document-text"
-          iconColor="#0d9488"
-          onPress={() => router.push("/vet/nova-consulta")}
-          isDark={isDark}
-        />
-
+      <Text style={s.sectionTitle}>Acesso Rápido</Text>
+      <View style={s.grid}>
         <ActionCard
           title="Agenda"
           iconName="calendar"
           iconColor="#8b5cf6"
-          badgeCount={agendaBadge}
-          onPress={handleAgendaPress}
+          badgeCount={metrics.pendentesCount}
+          onPress={() => router.push("/vet/agenda")}
           isDark={isDark}
         />
-
+        <ActionCard
+          title="Nova Consulta"
+          iconName="add-circle"
+          iconColor="#0d9488"
+          onPress={() => router.push("/vet/nova-consulta")}
+          isDark={isDark}
+        />
+        <ActionCard
+          title="Financeiro"
+          iconName="trending-up"
+          iconColor="#10b981"
+          onPress={() => router.push("/vet/financeiro")}
+          isDark={isDark}
+        />
         <ActionCard
           title="Tutores"
           iconName="people"
@@ -259,66 +184,76 @@ export default function VetHome() {
           onPress={() => router.push("/vet/tutores")}
           isDark={isDark}
         />
-
-        <ActionCard
-          title="Financeiro"
-          iconName="wallet"
-          iconColor="#10b981"
-          onPress={() => router.push("/vet/financeiro")}
-          isDark={isDark}
-        />
       </View>
 
-      <Text style={s.sectionTitle}>Consultas Recentes</Text>
-      {consultas.length > 0 ? (
-        consultas.slice(0, 5).map((c, i) => (
-          <View key={i} style={s.consultaCard}>
-            <View style={s.consultaHeader}>
-              <Ionicons name="paw" size={20} color="#0f766e" />
-              <Text style={s.consultaPet}>{c.petNome}</Text>
-              <Text style={s.consultaData}>{new Date(c.data).toLocaleDateString("pt-BR")}</Text>
+      <Text style={s.sectionTitle}>Últimos Atendimentos Concluídos</Text>
+      {metrics.ultimasConcluidas.length === 0 ? (
+        <View style={s.emptyHistory}>
+          <Ionicons name="clipboard-outline" size={40} color={colors.textMuted} />
+          <Text style={s.emptyText}>Nenhum atendimento concluído ainda.</Text>
+        </View>
+      ) : (
+        metrics.ultimasConcluidas.map((c) => (
+          <View key={c.id} style={s.historyCard}>
+            <View style={s.historyTop}>
+              <Text style={s.historyPet}>{c.petNome}</Text>
+              <Text style={s.historyDate}>{formatDate(c.dataHora)}</Text>
             </View>
-            <Text style={s.consultaDiagnostico}>{c.diagnostico}</Text>
+            <Text style={s.historyTutor}>Tutor: {c.tutorNome}</Text>
+            {c.diagnostico ? (
+              <Text style={s.historyDiag} numberOfLines={2}>
+                {c.diagnostico}
+              </Text>
+            ) : null}
           </View>
         ))
-      ) : (
-        <View style={s.emptyState}>
-          <Ionicons name="medical-outline" size={48} color={colors.textMuted} />
-          <Text style={s.emptyStateText}>Nenhuma consulta recente</Text>
-        </View>
       )}
 
-      {/* Modal Lateral */}
-      <Modal visible={menuVisible} animationType="fade" transparent={true}>
+      <Modal visible={menuVisible} animationType="fade" transparent>
         <View style={s.modalOverlay}>
-          <TouchableOpacity style={s.modalCloseArea} onPress={() => setMenuVisible(false)} />
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => setMenuVisible(false)}
+          />
           <View style={s.sideMenu}>
             <View style={s.sideMenuHeader}>
-              <Text style={s.sideMenuTitle}>Menu</Text>
+              <Text style={s.sideMenuTitle}>Menu Clínico</Text>
               <TouchableOpacity onPress={() => setMenuVisible(false)}>
                 <Ionicons name="close" size={28} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            {[
-              { icon: "person-outline", color: "#0f766e", label: "Meu Perfil", onPress: () => Alert.alert("Meu Perfil", "Editar perfil do veterinário.") },
-              { icon: "code-slash-outline", color: "#8b5cf6", label: "Desenvolvedores", onPress: () => { setMenuVisible(false); router.push("/tutor/integrantes"); } },
-              { icon: "settings-outline", color: "#f59e0b", label: "Configurações", onPress: () => { setMenuVisible(false); router.push("/vet/ajustes"); } },
-              { icon: "help-circle-outline", color: "#10b981", label: "FAQ", onPress: () => { setMenuVisible(false); router.push("/vet/faq"); } },
-              { icon: "chatbubbles-outline", color: "#ec4899", label: "SAC", onPress: () => { setMenuVisible(false); router.push("/vet/sac"); } },
-            ].map((item, idx) => (
-              <TouchableOpacity key={idx} style={s.sideMenuItem} onPress={item.onPress}>
-                <Ionicons name={item.icon as any} size={24} color={item.color} />
-                <Text style={s.sideMenuText}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => goFromMenu("/vet/ajustes")}>
+              <Ionicons name="settings-outline" size={22} color="#0d9488" />
+              <Text style={s.sideMenuText}>Perfil & Dados da Clínica</Text>
+            </TouchableOpacity>
 
-            <TouchableOpacity style={[s.sideMenuItem, s.logoutItem]} onPress={async () => {
-              await logout();
-              router.replace("/auth/login");
-            }}>
-              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-              <Text style={[s.sideMenuText, { color: "#ef4444" }]}>Sair</Text>
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => goFromMenu("/vet/faq")}>
+              <Ionicons name="help-circle-outline" size={22} color="#10b981" />
+              <Text style={s.sideMenuText}>Perguntas Frequentes</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => goFromMenu("/vet/sac")}>
+              <Ionicons name="chatbubbles-outline" size={22} color="#0ea5e9" />
+              <Text style={s.sideMenuText}>Suporte ao Parceiro (SAC)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.sideMenuItem} onPress={() => goFromMenu("/sobre")}>
+              <Ionicons name="information-circle-outline" size={22} color="#4f46e5" />
+              <Text style={s.sideMenuText}>Sobre o App</Text>
+            </TouchableOpacity>
+
+            <View style={s.divider} />
+
+            <TouchableOpacity
+              style={s.sideMenuItem}
+              onPress={async () => {
+                setMenuVisible(false);
+                await logout();
+              }}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#ef4444" />
+              <Text style={[s.sideMenuText, { color: "#ef4444" }]}>Sair da Conta</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -327,87 +262,123 @@ export default function VetHome() {
   );
 }
 
-function makeStyles(colors: any) {
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     contentContainer: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 32 },
-    headerText: { flex: 1 },
-    greeting: { fontSize: 26, fontWeight: "bold", color: "#0f766e" },
-    subtitle: { fontSize: 16, color: colors.textSecondary, marginTop: 4 },
-    menuButton: { padding: 8 },
-    searchSection: { marginBottom: 32 },
-    sectionTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 16 },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 22,
+    },
+    greeting: { fontSize: 25, fontWeight: "bold", color: colors.text },
+    subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+    menuButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surface,
+      justifyContent: "center",
+      alignItems: "center",
+      elevation: 2,
+    },
+    searchSection: { marginBottom: 22 },
+    sectionTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
     searchBar: {
-      flexDirection: "row", alignItems: "center", backgroundColor: colors.surface,
-      borderRadius: 16, paddingHorizontal: 16, paddingVertical: 8,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 16, color: colors.text, height: 40 },
-    searchButton: { backgroundColor: "#0d9488", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, minWidth: 70, alignItems: "center" },
-    searchButtonText: { color: "#fff", fontWeight: "bold" },
-    resultadosContainer: { marginTop: 12 },
-    resultadosCount: { fontSize: 13, color: colors.textMuted, marginBottom: 12 },
-    semResultados: { alignItems: "center", padding: 24, backgroundColor: colors.surface, borderRadius: 16 },
-    semResultadosText: { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: "center" },
-    resultadoCard: {
-      flexDirection: "row", alignItems: "center", backgroundColor: colors.surface,
-      borderRadius: 14, padding: 14, marginBottom: 10,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
-      borderLeftWidth: 3, borderLeftColor: "#0d9488",
+    searchInput: { flex: 1, fontSize: 15, color: colors.text },
+    searchResults: { marginTop: 12, gap: 10 },
+    patientCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      elevation: 2,
     },
-    resultadoFoto: { width: 50, height: 50, borderRadius: 25, marginRight: 14 },
-    resultadoFotoPlaceholder: {
-      width: 50, height: 50, borderRadius: 25, backgroundColor: "#ccfbf1",
-      justifyContent: "center", alignItems: "center", marginRight: 14,
+    patientAvatar: { width: 42, height: 42, borderRadius: 21 },
+    patientAvatarPlaceholder: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: "#ccfbf1",
+      justifyContent: "center",
+      alignItems: "center",
     },
-    resultadoInfo: { flex: 1 },
-    resultadoNome: { fontSize: 16, fontWeight: "bold", color: colors.text, marginBottom: 2 },
-    resultadoDetalhe: { fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
-    resultadoTutor: { flexDirection: "row", alignItems: "center" },
-    resultadoTutorText: { fontSize: 12, color: colors.textMuted, marginLeft: 4 },
-    resultadoBadges: { gap: 6, alignItems: "flex-end" },
-    badge: { backgroundColor: "#0d948820", color: "#0d9488", fontSize: 12, fontWeight: "bold", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-    dashboardContainer: { flexDirection: "row", justifyContent: "space-between", marginBottom: 32 },
-    dashCard: {
-      backgroundColor: colors.surface, flex: 1, borderRadius: 16, padding: 16,
-      marginHorizontal: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    patientName: { fontSize: 15, fontWeight: "bold", color: colors.text },
+    patientSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    whatsSmallBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: "#16a34a",
+      justifyContent: "center",
+      alignItems: "center",
     },
-    dashIconBox: { backgroundColor: "#ccfbf1", width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 12 },
-    dashValue: { fontSize: 24, fontWeight: "bold", color: colors.text, marginBottom: 4 },
-    dashLabel: { fontSize: 12, color: colors.textSecondary },
-    actionsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 32 },
-    consultaCard: {
-      backgroundColor: colors.surface, borderRadius: 12, padding: 16, marginBottom: 12,
-      borderLeftWidth: 4, borderLeftColor: "#0f766e",
-      shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05, shadowRadius: 3, elevation: 2,
+    attendBtn: {
+      backgroundColor: "#0d9488",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
     },
-    consultaHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-    consultaPet: { fontSize: 16, fontWeight: "bold", color: colors.text, marginLeft: 8, flex: 1 },
-    consultaData: { fontSize: 12, color: colors.textSecondary },
-    consultaDiagnostico: { fontSize: 14, color: colors.textSecondary },
-    emptyState: {
-      alignItems: "center", justifyContent: "center", padding: 32,
-      backgroundColor: colors.surface, borderRadius: 16,
-      borderWidth: 1, borderColor: colors.borderLight, borderStyle: "dashed",
+    attendBtnText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
+    metricsRow: { flexDirection: "row", gap: 12, marginBottom: 24 },
+    metricCard: {
+      flex: 1,
+      borderRadius: 20,
+      padding: 18,
     },
-    emptyStateText: { marginTop: 16, color: colors.textMuted, fontSize: 16 },
-    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", flexDirection: "row", justifyContent: "flex-end" },
-    modalCloseArea: { flex: 1 },
+    metricNumber: { color: "#fff", fontSize: 21, fontWeight: "bold", marginTop: 10 },
+    metricLabel: { color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 4, fontWeight: "600" },
+    grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 8 },
+    emptyHistory: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      padding: 28,
+      alignItems: "center",
+    },
+    emptyText: { color: colors.textMuted, fontSize: 14, marginTop: 8, textAlign: "center" },
+    historyCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      borderLeftWidth: 4,
+      borderLeftColor: "#0d9488",
+    },
+    historyTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    historyPet: { fontSize: 16, fontWeight: "bold", color: colors.text },
+    historyDate: { fontSize: 12, color: colors.textMuted },
+    historyTutor: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+    historyDiag: { fontSize: 13, color: colors.text, marginTop: 6, lineHeight: 19 },
+    modalOverlay: { flex: 1, flexDirection: "row", backgroundColor: "rgba(0,0,0,0.45)" },
     sideMenu: {
-      width: "75%", backgroundColor: colors.surface, height: "100%",
-      padding: 24, paddingTop: 60,
-      shadowColor: "#000", shadowOffset: { width: -4, height: 0 },
-      shadowOpacity: 0.1, shadowRadius: 10, elevation: 10,
+      width: 290,
+      backgroundColor: colors.surface,
+      paddingTop: 56,
+      paddingHorizontal: 22,
+      paddingBottom: 32,
     },
-    sideMenuHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 40 },
-    sideMenuTitle: { fontSize: 24, fontWeight: "bold", color: colors.text },
-    sideMenuItem: { flexDirection: "row", alignItems: "center", paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-    sideMenuText: { fontSize: 18, fontWeight: "500", color: colors.text, marginLeft: 16 },
-    logoutItem: { marginTop: "auto", borderBottomWidth: 0, borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 24 },
+    sideMenuHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 24,
+    },
+    sideMenuTitle: { fontSize: 22, fontWeight: "bold", color: colors.text },
+    sideMenuItem: { flexDirection: "row", alignItems: "center", paddingVertical: 13, gap: 14 },
+    sideMenuText: { fontSize: 15, fontWeight: "600", color: colors.text },
+    divider: { height: 1, backgroundColor: colors.borderLight, marginVertical: 14 },
   });
 }

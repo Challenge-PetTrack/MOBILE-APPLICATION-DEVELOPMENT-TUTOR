@@ -1,528 +1,612 @@
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, Alert, Image, TextInput
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  Alert,
+  Image,
+  TextInput,
 } from "react-native";
-import { useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "@/context/ThemeContext";
-import * as ImagePicker from "expo-image-picker";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import Header from "@/components/Header";
+import LoadingScreen from "@/components/LoadingScreen";
+import ErrorScreen from "@/components/ErrorScreen";
+import { useTheme, type ThemeColors } from "@/context/ThemeContext";
+import {
+  useClinicaConsultas,
+  useExportReceita,
+  useUpdateConsultaVet,
+} from "@/hooks/useConsultas";
+import { useClinicaVet } from "@/hooks/useClinica";
+import { useImagePicker } from "@/hooks/useImagePicker";
+import {
+  addDays,
+  formatDateTime,
+  formatLongDate,
+  formatTime,
+  isSameDay,
+} from "@/utils/date";
+import { parseCurrency } from "@/utils/currency";
+import type { Clinica, Consulta, ConsultaStatus } from "@/types/models";
 
-// Agendamentos mock para dias variados
-const AGENDAMENTOS_MOCK = [
-  { id: "m1", horario: "09:00", tutor: "Maria Silva", pet: "Bolinha", motivo: "Consulta de Rotina", status: "concluido", origem: "interno", dataOffset: 0 },
-  { id: "m2", horario: "10:30", tutor: "João Souza", pet: "Rex", motivo: "Retorno Vacina V10", status: "pendente", origem: "interno", dataOffset: 0 },
-  { id: "m3", horario: "14:00", tutor: "Ana Costa", pet: "Mia", motivo: "Dermatite Suspeita", status: "pendente", origem: "interno", dataOffset: 0 },
-  { id: "m4", horario: "08:30", tutor: "Carlos Dias", pet: "Thor", motivo: "Avaliação Pré-Cirúrgica", status: "pendente", origem: "interno", dataOffset: 1 },
-  { id: "m5", horario: "11:00", tutor: "Fernanda Lima", pet: "Luna", motivo: "Consulta de Rotina", status: "pendente", origem: "interno", dataOffset: 1 },
-  { id: "m6", horario: "15:30", tutor: "Roberto Santos", pet: "Duke", motivo: "Vacinas Anuais", status: "pendente", origem: "interno", dataOffset: 2 },
-  { id: "m7", horario: "09:30", tutor: "Juliana Rocha", pet: "Mel", motivo: "Castração", status: "pendente", origem: "interno", dataOffset: -1 },
-  { id: "m8", horario: "16:00", tutor: "Pedro Alves", pet: "Bob", motivo: "Check-up Geral", status: "concluido", origem: "interno", dataOffset: -1 },
+const EMPTY_CONSULTAS: Consulta[] = [];
+
+const STATUS_OPTIONS: { value: ConsultaStatus; label: string; color: string }[] = [
+  { value: "pendente", label: "Pendente", color: "#f59e0b" },
+  { value: "confirmada", label: "Confirmada", color: "#2563eb" },
+  { value: "concluida", label: "Concluída", color: "#10b981" },
+  { value: "cancelada", label: "Cancelada", color: "#ef4444" },
 ];
 
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function formatarData(date: Date): string {
-  return date.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" });
-}
-
-function formatarDataLonga(date: Date): string {
-  return date.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-}
-
-export default function AgendaVet() {
+export default function AgendaVetScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ consultaId?: string; data?: string }>();
   const { colors } = useTheme();
-  const hoje = new Date();
+  const s = makeStyles(colors);
 
-  const [diaSelecionado, setDiaSelecionado] = useState(hoje);
-  const [agendamentosDoDia, setAgendamentosDoDia] = useState<any[]>([]);
-  const [detalheVisible, setDetalheVisible] = useState(false);
-  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<any>(null);
-  const [novoStatus, setNovoStatus] = useState("");
-  const [observacaoVet, setObservacaoVet] = useState("");
-  const [anexos, setAnexos] = useState<string[]>([]);
-  const [vetInfo, setVetInfo] = useState<any>({});
+  const consultasQuery = useClinicaConsultas();
+  const clinicaQuery = useClinicaVet();
 
-  // Semana exibida: 7 dias a partir de 3 dias atrás
-  const semana = Array.from({ length: 7 }, (_, i) => addDays(hoje, i - 2));
+  const hoje = useMemo(() => new Date(), []);
+  const [modoFiltro, setModoFiltro] = useState<"dia" | "pendentes">("dia");
+  const [manualDia, setManualDia] = useState<Date | null>(null);
+  const [manualSelecionada, setManualSelecionada] = useState<Consulta | null>(null);
+  const [dismissedParamId, setDismissedParamId] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      carregarDia(diaSelecionado);
-    }, [diaSelecionado])
+  const semana = useMemo(
+    () => Array.from({ length: 10 }, (_, i) => addDays(hoje, i - 2)),
+    [hoje]
   );
 
-  const carregarDia = async (dia: Date) => {
-    try {
-      const sessionStr = await AsyncStorage.getItem("@session");
-      if (sessionStr) {
-        setVetInfo(JSON.parse(sessionStr));
-      }
-      const data = await AsyncStorage.getItem("@agenda_consultas");
-      const doTutor = data ? JSON.parse(data) : [];
+  const todasConsultas = consultasQuery.data ?? EMPTY_CONSULTAS;
 
-      // Mock: mapear offset para datas reais
-      const mockComData = AGENDAMENTOS_MOCK.map(m => ({
-        ...m,
-        dataReal: addDays(hoje, m.dataOffset),
-      })).filter(m => isSameDay(m.dataReal, dia));
+  const deepLinkedConsulta = useMemo(() => {
+    if (!params.consultaId || dismissedParamId === params.consultaId) return null;
+    return todasConsultas.find((c) => c.id === params.consultaId) ?? null;
+  }, [dismissedParamId, params.consultaId, todasConsultas]);
 
-      // Reais dos tutores: filtrar pela data digitada
-      const reais = doTutor
-        .filter((a: any) => {
-          if (!a.data) return false;
-          // Tentar parsear a data do tutor (pode ser DD/MM/AAAA)
-          const parts = a.data.split("/");
-          if (parts.length === 3) {
-            const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-            return isSameDay(d, dia);
-          }
-          return false;
-        })
-        .map((a: any) => ({
-          ...a,
-          tutor: a.tutorNome,
-          status: a.status || "pendente",
-          dataReal: dia,
-        }));
+  const selecionada = manualSelecionada ?? deepLinkedConsulta;
 
-      const todos = [...mockComData, ...reais].sort((a, b) => a.horario.localeCompare(b.horario));
-      setAgendamentosDoDia(todos);
+  const diaSelecionado = useMemo(() => {
+    if (manualDia) return manualDia;
+    if (deepLinkedConsulta) return new Date(deepLinkedConsulta.dataHora);
+    if (params.data) return new Date(params.data);
+    return hoje;
+  }, [deepLinkedConsulta, hoje, manualDia, params.data]);
 
-      // Marcar como visto
-      await AsyncStorage.setItem("@agenda_visto_count", doTutor.length.toString());
-    } catch (e) {
-      console.error(e);
-    }
+  const fecharDetalhe = () => {
+    setManualSelecionada(null);
+    if (params.consultaId) setDismissedParamId(params.consultaId);
   };
 
-  const abrirDetalhe = async (agendamento: any) => {
-    setAgendamentoSelecionado(agendamento);
-    setNovoStatus(agendamento.status);
-    setObservacaoVet(agendamento.observacaoVet || "");
-    
-    // Load attachments
-    try {
-      const anexosData = await AsyncStorage.getItem(`@anexos_consulta_${agendamento.id}`);
-      if (anexosData) setAnexos(JSON.parse(anexosData));
-      else setAnexos([]);
-    } catch (e) {
-      setAnexos([]);
+  const consultasExibidas = useMemo(() => {
+    if (modoFiltro === "pendentes") {
+      return [...todasConsultas]
+        .filter((c) => c.status === "pendente" || c.status === "confirmada")
+        .sort((a, b) => a.dataHora.localeCompare(b.dataHora));
     }
-    
-    setDetalheVisible(true);
-  };
+    return [...todasConsultas]
+      .filter((c) => isSameDay(new Date(c.dataHora), diaSelecionado))
+      .sort((a, b) => a.dataHora.localeCompare(b.dataHora));
+  }, [todasConsultas, modoFiltro, diaSelecionado]);
 
-  const salvarDetalhe = async () => {
-    if (!agendamentoSelecionado) return;
+  const pendentesTotal = useMemo(
+    () => todasConsultas.filter((c) => c.status === "pendente").length,
+    [todasConsultas]
+  );
 
-    try {
-      // Se for agendamento do tutor, atualizar no AsyncStorage
-      if (agendamentoSelecionado.origem === "tutor" || agendamentoSelecionado.tutorId) {
-        const data = await AsyncStorage.getItem("@agenda_consultas");
-        if (data) {
-          const agenda = JSON.parse(data);
-          const idx = agenda.findIndex((a: any) => a.id === agendamentoSelecionado.id);
-          if (idx !== -1) {
-            agenda[idx] = { ...agenda[idx], status: novoStatus, observacaoVet };
-            await AsyncStorage.setItem("@agenda_consultas", JSON.stringify(agenda));
-            await AsyncStorage.setItem(`@anexos_consulta_${agendamentoSelecionado.id}`, JSON.stringify(anexos));
-          }
-        }
-      }
-
-      setDetalheVisible(false);
-      carregarDia(diaSelecionado);
-      Alert.alert("Salvo!", "Agendamento atualizado com sucesso.");
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível salvar.");
-    }
-  };
-
-  const pickAnexo = async () => {
-    if (anexos.length >= 3) {
-      Alert.alert("Limite", "Máximo de 3 anexos por consulta.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-      base64: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setAnexos([...anexos, result.assets[0].uri]);
-    }
-  };
-
-  const removerAnexo = (index: number) => {
-    const novaLista = [...anexos];
-    novaLista.splice(index, 1);
-    setAnexos(novaLista);
-  };
-
-  const gerarReceita = async () => {
-    if (!agendamentoSelecionado) return;
-    try {
-      const html = `
-        <html>
-          <head>
-            <style>
-              body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #1f2937; }
-              .header { text-align: center; border-bottom: 2px solid #8b5cf6; padding-bottom: 20px; margin-bottom: 30px; }
-              .title { color: #8b5cf6; font-size: 28px; font-weight: bold; margin: 0; }
-              .subtitle { font-size: 16px; margin-top: 5px; color: #4b5563; }
-              .info-box { background-color: #f3f4f6; padding: 15px; border-radius: 10px; margin-bottom: 30px; }
-              .info-row { margin-bottom: 5px; font-size: 14px; }
-              .label { font-weight: bold; }
-              .content { min-height: 400px; }
-              .presc-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;}
-              .signature { margin-top: 50px; text-align: center; }
-              .line { border-top: 1px solid #1f2937; width: 250px; margin: 0 auto 10px auto; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1 class="title">Receituário Veterinário</h1>
-              <p class="subtitle">Clínica PetTrack</p>
-            </div>
-            
-            <div class="info-box">
-              <div class="info-row"><span class="label">Paciente:</span> ${agendamentoSelecionado.pet}</div>
-              <div class="info-row"><span class="label">Tutor:</span> ${agendamentoSelecionado.tutor}</div>
-              <div class="info-row"><span class="label">Data:</span> ${formatarDataLonga(diaSelecionado)}</div>
-            </div>
-            
-            <div class="content">
-              <div class="presc-title">Prescrição e Recomendações:</div>
-              <p style="white-space: pre-wrap; font-size: 15px; line-height: 1.6;">${observacaoVet || "Sem prescrições no momento."}</p>
-            </div>
-            
-            <div class="signature">
-              <div class="line"></div>
-              <div>${vetInfo?.nome || "Médico(a) Veterinário(a)"}</div>
-              <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">CRMV: ${vetInfo?.crmv || "Não informado"}</div>
-            </div>
-          </body>
-        </html>
-      `;
-
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Compartilhar Receita' });
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const s = makeStyles(colors);
+  if (consultasQuery.isLoading) return <LoadingScreen message="Carregando agenda clínica..." />;
+  if (consultasQuery.isError) return <ErrorScreen onRetry={() => consultasQuery.refetch()} />;
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+      <Header
+        title="Agenda Clínica"
+        rightAction={
+          <TouchableOpacity
+            style={s.addBtn}
+            onPress={() => router.push("/vet/nova-consulta")}
+            accessibilityLabel="Nova consulta"
+          >
+            <Ionicons name="add" size={24} color="#fff" />
+          </TouchableOpacity>
+        }
+      />
+
+      <View style={s.filterTabs}>
+        <TouchableOpacity
+          style={[s.filterTab, modoFiltro === "dia" && s.filterTabActive]}
+          onPress={() => setModoFiltro("dia")}
+        >
+          <Text style={[s.filterTabText, modoFiltro === "dia" && s.filterTabTextActive]}>
+            Por Dia
+          </Text>
         </TouchableOpacity>
-        <Text style={s.title}>Agenda</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          style={[s.filterTab, modoFiltro === "pendentes" && s.filterTabActive]}
+          onPress={() => setModoFiltro("pendentes")}
+        >
+          <Text
+            style={[
+              s.filterTabText,
+              modoFiltro === "pendentes" && s.filterTabTextActive,
+            ]}
+          >
+            Aguardando / Confirmadas ({pendentesTotal} pendente{pendentesTotal === 1 ? "" : "s"})
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Seletor de Dias — Scroll Horizontal */}
-      <View style={s.weekStrip}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weekScroll}>
-          {semana.map((dia, i) => {
-            const isHoje = isSameDay(dia, hoje);
-            const isSel = isSameDay(dia, diaSelecionado);
-            return (
-              <TouchableOpacity
-                key={i}
-                style={[s.dayPill, isSel && s.dayPillSelected, isHoje && !isSel && s.dayPillHoje]}
-                onPress={() => setDiaSelecionado(dia)}
-              >
-                <Text style={[s.dayWeek, isSel && s.dayTextSelected]}>
-                  {dia.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "").toUpperCase()}
-                </Text>
-                <Text style={[s.dayNum, isSel && s.dayTextSelected]}>{dia.getDate()}</Text>
-                {isHoje && <View style={[s.hojeDot, isSel && { backgroundColor: "#fff" }]} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {modoFiltro === "dia" && (
+        <>
+          <View style={s.weekStrip}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.weekScroll}
+            >
+              {semana.map((dia, idx) => {
+                const isHoje = isSameDay(dia, hoje);
+                const isSel = isSameDay(dia, diaSelecionado);
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      s.dayPill,
+                      isSel && s.dayPillSelected,
+                      isHoje && !isSel && s.dayPillHoje,
+                    ]}
+                    onPress={() => setManualDia(dia)}
+                  >
+                    <Text style={[s.dayWeek, isSel && s.dayTextSelected]}>
+                      {dia
+                        .toLocaleDateString("pt-BR", { weekday: "short" })
+                        .replace(".", "")
+                        .toUpperCase()}
+                    </Text>
+                    <Text style={[s.dayNum, isSel && s.dayTextSelected]}>{dia.getDate()}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-      {/* Título do Dia */}
-      <View style={s.diaHeader}>
-        <Text style={s.diaTitle}>{formatarDataLonga(diaSelecionado)}</Text>
-        <View style={s.countBadge}>
-          <Text style={s.countBadgeText}>{agendamentosDoDia.length} consulta(s)</Text>
-        </View>
-      </View>
+          <View style={s.diaHeader}>
+            <Text style={s.diaTitle}>{formatLongDate(diaSelecionado)}</Text>
+            <Text style={s.countText}>{consultasExibidas.length} consulta(s)</Text>
+          </View>
+        </>
+      )}
 
-      <ScrollView style={s.content} showsVerticalScrollIndicator={false}>
-        {agendamentosDoDia.length === 0 ? (
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        {consultasExibidas.length === 0 ? (
           <View style={s.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
-            <Text style={s.emptyText}>Nenhum agendamento para este dia</Text>
+            <Ionicons name="calendar-outline" size={56} color={colors.textMuted} />
+            <Text style={s.emptyText}>Nenhum agendamento encontrado para este filtro.</Text>
           </View>
         ) : (
-          agendamentosDoDia.map((a, i) => (
-            <TouchableOpacity key={a.id || i} style={[s.card, a.origem === "tutor" && s.cardTutor]} onPress={() => abrirDetalhe(a)} activeOpacity={0.85}>
-              <View style={s.timeColumn}>
-                <Text style={s.timeText}>{a.horario}</Text>
-                <View style={[s.statusDot, { backgroundColor: a.status === "concluido" ? "#10b981" : a.status === "cancelado" ? "#ef4444" : "#f59e0b" }]} />
-              </View>
-              <View style={s.infoColumn}>
-                {a.origem === "tutor" && (
-                  <View style={s.newBadge}>
-                    <Text style={s.newBadgeText}>Solicitado ✨</Text>
-                  </View>
-                )}
-                <View style={s.infoRow}>
-                  <Ionicons name="paw" size={16} color={colors.textSecondary} />
-                  <Text style={s.petName}>{a.pet}</Text>
+          consultasExibidas.map((c) => {
+            const stOpt = STATUS_OPTIONS.find((o) => o.value === c.status) ?? STATUS_OPTIONS[0];
+            return (
+              <TouchableOpacity
+                key={c.id}
+                style={[s.card, { borderLeftColor: stOpt.color }]}
+                onPress={() => setManualSelecionada(c)}
+                activeOpacity={0.85}
+              >
+                <View style={s.timeColumn}>
+                  <Text style={s.timeText}>{formatTime(c.dataHora)}</Text>
+                  <Text style={[s.statusSmall, { color: stOpt.color }]}>{stOpt.label}</Text>
                 </View>
-                <View style={s.infoRow}>
-                  <Ionicons name="person" size={16} color={colors.textMuted} />
-                  <Text style={s.tutorName}>{a.tutor}</Text>
+                <View style={{ flex: 1 }}>
+                  {c.origem === "tutor" && c.status === "pendente" && (
+                    <View style={s.newBadge}>
+                      <Text style={s.newBadgeText}>Solicitado pelo Tutor</Text>
+                    </View>
+                  )}
+                  <Text style={s.petName}>{c.petNome}</Text>
+                  <Text style={s.tutorName}>Tutor: {c.tutorNome}</Text>
+                  <Text style={s.motivoText} numberOfLines={2}>
+                    {c.motivo}
+                  </Text>
                 </View>
-                <Text style={s.motivoText}>{a.motivo}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
-          ))
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            );
+          })
         )}
-
-        <TouchableOpacity style={s.fabButton} onPress={() => router.push("/vet/nova-consulta")}>
-          <Ionicons name="add" size={24} color="#fff" />
-          <Text style={s.fabText}>Nova Consulta</Text>
-        </TouchableOpacity>
-        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Modal de Detalhe do Agendamento */}
-      <Modal visible={detalheVisible} animationType="slide" transparent>
+      <Modal visible={!!selecionada} animationType="slide" transparent>
         <View style={s.modalOverlay}>
-          <View style={s.modalBox}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Detalhes da Consulta</Text>
-              <TouchableOpacity onPress={() => setDetalheVisible(false)} style={s.closeBtn}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {agendamentoSelecionado && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Info do Agendamento */}
-                <View style={s.detalheInfoCard}>
-                  <View style={s.detalheRow}>
-                    <Ionicons name="time" size={20} color="#8b5cf6" />
-                    <Text style={s.detalheLabel}>Horário</Text>
-                    <Text style={s.detalheValue}>{agendamentoSelecionado.horario} — {formatarData(diaSelecionado)}</Text>
-                  </View>
-                  <View style={s.detalheDivider} />
-                  <View style={s.detalheRow}>
-                    <Ionicons name="paw" size={20} color="#0d9488" />
-                    <Text style={s.detalheLabel}>Paciente</Text>
-                    <Text style={s.detalheValue}>{agendamentoSelecionado.pet}</Text>
-                  </View>
-                  <View style={s.detalheDivider} />
-                  <View style={s.detalheRow}>
-                    <Ionicons name="person" size={20} color="#f59e0b" />
-                    <Text style={s.detalheLabel}>Tutor</Text>
-                    <Text style={s.detalheValue}>{agendamentoSelecionado.tutor}</Text>
-                  </View>
-                  <View style={s.detalheDivider} />
-                  <View style={s.detalheRow}>
-                    <Ionicons name="clipboard" size={20} color="#ec4899" />
-                    <Text style={s.detalheLabel}>Motivo</Text>
-                    <Text style={[s.detalheValue, { flex: 1 }]}>{agendamentoSelecionado.motivo}</Text>
-                  </View>
-                </View>
-
-                {/* Alterar Status */}
-                <Text style={s.sectionLabel}>Status da Consulta</Text>
-                <View style={s.statusSelector}>
-                  {["pendente", "concluido", "cancelado"].map(st => (
-                    <TouchableOpacity
-                      key={st}
-                      style={[s.statusOption, novoStatus === st && s.statusOptionSelected(st)]}
-                      onPress={() => setNovoStatus(st)}
-                    >
-                      <View style={[s.statusDot2, { backgroundColor: st === "concluido" ? "#10b981" : st === "cancelado" ? "#ef4444" : "#f59e0b" }]} />
-                      <Text style={[s.statusOptionText, novoStatus === st && { color: "#fff" }]}>
-                        {st === "concluido" ? "Concluído" : st === "cancelado" ? "Cancelado" : "Pendente"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Observação / Diagnóstico */}
-                <Text style={s.sectionLabel}>Prescrição / Observação</Text>
-                <TextInput
-                  style={s.obsInput}
-                  placeholder="Escreva sua prescrição ou diagnóstico aqui..."
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={4}
-                  value={observacaoVet}
-                  onChangeText={setObservacaoVet}
-                />
-
-                {/* Anexos Fotográficos */}
-                <View style={s.anexoHeader}>
-                  <Text style={[s.sectionLabel, { marginBottom: 0 }]}>Anexos ({anexos.length}/3)</Text>
-                  <TouchableOpacity onPress={pickAnexo}>
-                    <Ionicons name="camera" size={24} color="#8b5cf6" />
-                  </TouchableOpacity>
-                </View>
-                
-                {anexos.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.anexosContainer}>
-                    {anexos.map((uri, idx) => (
-                      <View key={idx} style={s.anexoItem}>
-                        <Image source={{ uri }} style={s.anexoImg} />
-                        <TouchableOpacity style={s.anexoRemove} onPress={() => removerAnexo(idx)}>
-                          <Ionicons name="close" size={16} color="#fff" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
-
-                <TouchableOpacity style={s.receitaBtn} onPress={gerarReceita}>
-                  <Ionicons name="document-text" size={20} color="#fff" />
-                  <Text style={s.receitaBtnText}>Gerar Receita em PDF</Text>
-                </TouchableOpacity>
-
-                <View style={s.modalActions}>
-                  <TouchableOpacity style={s.cancelarBtn} onPress={() => setDetalheVisible(false)}>
-                    <Text style={s.cancelarText}>Fechar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.salvarBtn} onPress={salvarDetalhe}>
-                    <Text style={s.salvarText}>Salvar</Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            )}
-          </View>
+          {selecionada && (
+            <ProntuarioModalContent
+              key={selecionada.id}
+              consulta={selecionada}
+              clinica={clinicaQuery.data}
+              colors={colors}
+              styles={s}
+              onClose={fecharDetalhe}
+            />
+          )}
         </View>
       </Modal>
     </View>
   );
 }
 
-function makeStyles(colors: any) {
+interface ProntuarioModalProps {
+  consulta: Consulta;
+  clinica: Clinica | null | undefined;
+  colors: ThemeColors;
+  styles: ReturnType<typeof makeStyles>;
+  onClose: () => void;
+}
+
+function ProntuarioModalContent({
+  consulta,
+  clinica,
+  colors,
+  styles: s,
+  onClose,
+}: ProntuarioModalProps) {
+  const updateConsulta = useUpdateConsultaVet();
+  const exportReceita = useExportReceita();
+  const { selectImage } = useImagePicker();
+
+  const [novoStatus, setNovoStatus] = useState<ConsultaStatus>(consulta.status);
+  const [diagnostico, setDiagnostico] = useState(consulta.diagnostico ?? "");
+  const [prescricao, setPrescricao] = useState(
+    consulta.prescricao || consulta.observacaoVet || ""
+  );
+  const [valorInput, setValorInput] = useState(
+    String(consulta.valor ?? clinica?.valorConsulta ?? 150)
+  );
+  const [anexos, setAnexos] = useState<string[]>(consulta.anexos ?? []);
+
+  const handleSalvarDetalhe = async () => {
+    const parsedValor = parseCurrency(valorInput);
+
+    try {
+      await updateConsulta.mutateAsync({
+        id: consulta.id,
+        status: novoStatus,
+        diagnostico,
+        prescricao,
+        observacaoVet: prescricao,
+        anexos,
+        valor: Number.isFinite(parsedValor) && parsedValor > 0 ? parsedValor : undefined,
+      });
+      onClose();
+      Alert.alert(
+        "Prontuário salvo!",
+        "As informações foram sincronizadas com o tutor em tempo real."
+      );
+    } catch {
+      Alert.alert("Erro", "Não foi possível atualizar a consulta.");
+    }
+  };
+
+  const handleAdicionarAnexo = async () => {
+    if (anexos.length >= 3) {
+      Alert.alert("Limite atingido", "É permitido anexar até 3 imagens por consulta.");
+      return;
+    }
+    const uri = await selectImage("library");
+    if (uri) setAnexos((prev) => [...prev, uri]);
+  };
+
+  return (
+    <View style={s.modalBox}>
+      <View style={s.modalHeader}>
+        <Text style={s.modalTitle}>Prontuário da Consulta</Text>
+        <TouchableOpacity onPress={onClose}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={s.infoSummary}>
+          <Text style={s.infoLine}>
+            <Text style={s.infoLabel}>Paciente:</Text> {consulta.petNome}
+          </Text>
+          <Text style={s.infoLine}>
+            <Text style={s.infoLabel}>Tutor(a):</Text> {consulta.tutorNome}
+          </Text>
+          <Text style={s.infoLine}>
+            <Text style={s.infoLabel}>Data/Hora:</Text> {formatDateTime(consulta.dataHora)}
+          </Text>
+          <Text style={s.infoLine}>
+            <Text style={s.infoLabel}>Motivo:</Text> {consulta.motivo}
+          </Text>
+        </View>
+
+        <Text style={s.fieldLabel}>Status do Atendimento</Text>
+        <View style={s.statusGrid}>
+          {STATUS_OPTIONS.map((opt) => {
+            const active = novoStatus === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[s.statusOption, active && { backgroundColor: opt.color }]}
+                onPress={() => setNovoStatus(opt.value)}
+              >
+                <Text style={[s.statusOptionText, active && { color: "#fff" }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={s.fieldLabel}>Diagnóstico Clínico</Text>
+        <TextInput
+          style={s.input}
+          placeholder="Descreva o diagnóstico..."
+          placeholderTextColor={colors.textMuted}
+          value={diagnostico}
+          onChangeText={setDiagnostico}
+        />
+
+        <Text style={s.fieldLabel}>Prescrição e Recomendações</Text>
+        <TextInput
+          style={[s.input, s.textArea]}
+          placeholder="Medicamentos, posologia e orientações..."
+          placeholderTextColor={colors.textMuted}
+          multiline
+          value={prescricao}
+          onChangeText={setPrescricao}
+        />
+
+        <Text style={s.fieldLabel}>Valor da Consulta (R$)</Text>
+        <TextInput
+          style={s.input}
+          placeholder="150,00"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="decimal-pad"
+          value={valorInput}
+          onChangeText={setValorInput}
+        />
+
+        <View style={s.anexosHeader}>
+          <Text style={s.fieldLabel}>Anexos / Exames ({anexos.length}/3)</Text>
+          <TouchableOpacity onPress={handleAdicionarAnexo} style={s.anexoAddBtn}>
+            <Ionicons name="camera-outline" size={16} color="#8b5cf6" />
+            <Text style={s.anexoAddText}>Anexar</Text>
+          </TouchableOpacity>
+        </View>
+
+        {anexos.length > 0 && (
+          <View style={s.anexosRow}>
+            {anexos.map((uri, idx) => (
+              <View key={idx} style={s.anexoItem}>
+                <Image source={{ uri }} style={s.anexoImg} />
+                <TouchableOpacity
+                  style={s.anexoRemove}
+                  onPress={() => setAnexos((prev) => prev.filter((_, i) => i !== idx))}
+                >
+                  <Ionicons name="close-circle" size={20} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={s.pdfBtn}
+          onPress={() =>
+            exportReceita.mutate({
+              consulta: {
+                ...consulta,
+                diagnostico,
+                prescricao,
+                observacaoVet: prescricao,
+              },
+              clinica: clinica ?? undefined,
+            })
+          }
+        >
+          <Ionicons name="document-text-outline" size={18} color="#8b5cf6" />
+          <Text style={s.pdfBtnText}>Gerar Receituário em PDF</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={s.saveBtn}
+          onPress={handleSalvarDetalhe}
+          disabled={updateConsulta.isPending}
+        >
+          <Ionicons name="checkmark-circle-outline" size={19} color="#fff" />
+          <Text style={s.saveBtnText}>
+            {updateConsulta.isPending ? "Salvando..." : "Salvar Alterações"}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}
+
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16, backgroundColor: colors.background,
+    addBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: "#8b5cf6",
+      justifyContent: "center",
+      alignItems: "center",
     },
-    backButton: {
-      width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface,
-      justifyContent: "center", alignItems: "center",
-      shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
+    filterTabs: {
+      flexDirection: "row",
+      marginHorizontal: 24,
+      marginBottom: 14,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 14,
+      padding: 4,
     },
-    title: { fontSize: 22, fontWeight: "bold", color: colors.text },
-    weekStrip: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-    weekScroll: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+    filterTab: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center" },
+    filterTabActive: { backgroundColor: "#8b5cf6" },
+    filterTabText: { fontSize: 12, fontWeight: "700", color: colors.textSecondary },
+    filterTabTextActive: { color: "#fff" },
+    weekStrip: { marginBottom: 14 },
+    weekScroll: { paddingHorizontal: 24, gap: 8 },
     dayPill: {
-      alignItems: "center", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16,
-      minWidth: 58, backgroundColor: colors.surfaceSecondary,
+      width: 56,
+      paddingVertical: 10,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    dayPillSelected: { backgroundColor: "#8b5cf6" },
-    dayPillHoje: { borderWidth: 2, borderColor: "#8b5cf6" },
+    dayPillSelected: { backgroundColor: "#8b5cf6", borderColor: "#8b5cf6" },
+    dayPillHoje: { borderColor: "#8b5cf6" },
+    dayWeek: { fontSize: 11, fontWeight: "700", color: colors.textMuted },
+    dayNum: { fontSize: 18, fontWeight: "bold", color: colors.text, marginTop: 2 },
     dayTextSelected: { color: "#fff" },
-    dayWeek: { fontSize: 11, fontWeight: "700", color: colors.textMuted, marginBottom: 4 },
-    dayNum: { fontSize: 18, fontWeight: "bold", color: colors.text },
-    hojeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#8b5cf6", marginTop: 3 },
-    diaHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingVertical: 16 },
-    diaTitle: { fontSize: 16, fontWeight: "bold", color: colors.text, textTransform: "capitalize", flex: 1 },
-    countBadge: { backgroundColor: colors.isDark ? "#3d2d6e" : "#ede9fe", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-    countBadgeText: { color: "#7c3aed", fontSize: 12, fontWeight: "bold" },
-    content: { paddingHorizontal: 24 },
+    diaHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 24,
+      marginBottom: 12,
+    },
+    diaTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      textTransform: "capitalize",
+      flex: 1,
+    },
+    countText: { fontSize: 13, fontWeight: "bold", color: "#8b5cf6" },
+    content: { paddingHorizontal: 24, paddingBottom: 40 },
+    emptyContainer: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 36,
+      alignItems: "center",
+      marginTop: 12,
+    },
+    emptyText: { color: colors.textMuted, fontSize: 14, marginTop: 10, textAlign: "center" },
     card: {
-      flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: 16,
-      padding: 16, marginBottom: 14,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      borderLeftWidth: 4,
+      elevation: 2,
     },
-    cardTutor: { borderWidth: 1.5, borderColor: "#8b5cf6" },
-    timeColumn: { alignItems: "center", borderRightWidth: 1, borderRightColor: colors.borderLight, paddingRight: 14, marginRight: 14 },
-    timeText: { fontSize: 17, fontWeight: "bold", color: colors.text, marginBottom: 8 },
-    statusDot: { width: 12, height: 12, borderRadius: 6 },
-    infoColumn: { flex: 1 },
-    newBadge: { backgroundColor: "#8b5cf6", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, alignSelf: "flex-start", marginBottom: 6 },
-    newBadgeText: { color: "#fff", fontSize: 11, fontWeight: "bold" },
-    infoRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-    petName: { fontSize: 16, fontWeight: "bold", color: colors.text, marginLeft: 8 },
-    tutorName: { fontSize: 14, color: colors.textSecondary, marginLeft: 8 },
-    motivoText: { fontSize: 13, color: "#8b5cf6", fontWeight: "500", marginTop: 4 },
-    emptyContainer: { alignItems: "center", paddingTop: 60, paddingBottom: 40 },
-    emptyText: { marginTop: 16, fontSize: 16, color: colors.textMuted },
-    fabButton: {
-      backgroundColor: "#8b5cf6", flexDirection: "row", alignItems: "center",
-      justifyContent: "center", paddingVertical: 16, borderRadius: 16, marginTop: 16,
-      shadowColor: "#8b5cf6", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+    timeColumn: { alignItems: "center", minWidth: 64 },
+    timeText: { fontSize: 16, fontWeight: "bold", color: colors.text },
+    statusSmall: { fontSize: 11, fontWeight: "700", marginTop: 4 },
+    newBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: "#ede9fe",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      marginBottom: 4,
     },
-    fabText: { color: "#fff", fontSize: 16, fontWeight: "bold", marginLeft: 8 },
-
-    // Modal Detalhe
+    newBadgeText: { fontSize: 10, fontWeight: "bold", color: "#6d28d9" },
+    petName: { fontSize: 16, fontWeight: "bold", color: colors.text },
+    tutorName: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+    motivoText: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
     modalBox: {
-      backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-      padding: 28, paddingBottom: 40, maxHeight: "90%",
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
+      padding: 24,
+      maxHeight: "90%",
     },
-    modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14,
+    },
     modalTitle: { fontSize: 20, fontWeight: "bold", color: colors.text },
-    closeBtn: { padding: 4, backgroundColor: colors.surfaceSecondary, borderRadius: 12 },
-    detalheInfoCard: {
-      backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 16, marginBottom: 24,
+    infoSummary: {
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 16,
+      gap: 4,
     },
-    detalheRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12 },
-    detalheLabel: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginLeft: 12, width: 80 },
-    detalheValue: { fontSize: 15, fontWeight: "500", color: colors.text, marginLeft: 8 },
-    detalheDivider: { height: 1, backgroundColor: colors.borderLight },
-    sectionLabel: { fontSize: 14, fontWeight: "700", color: colors.textSecondary, marginBottom: 12 },
-    statusSelector: { flexDirection: "row", gap: 10, marginBottom: 24 },
+    infoLine: { fontSize: 13, color: colors.text },
+    infoLabel: { fontWeight: "bold", color: colors.textSecondary },
+    fieldLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 6,
+    },
+    statusGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
     statusOption: {
-      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-      paddingVertical: 10, borderRadius: 12, backgroundColor: colors.surfaceSecondary,
-      borderWidth: 1, borderColor: colors.border,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceSecondary,
     },
-    statusOptionSelected: (st: string) => ({
-      backgroundColor: st === "concluido" ? "#10b981" : st === "cancelado" ? "#ef4444" : "#f59e0b",
-      borderColor: "transparent",
-    }),
-    statusOptionText: { fontSize: 13, fontWeight: "600", color: colors.text, marginLeft: 6 },
-    statusDot2: { width: 10, height: 10, borderRadius: 5 },
-    obsInput: {
-      backgroundColor: colors.inputBackground, borderRadius: 14, padding: 16, fontSize: 15,
-      color: colors.text, borderWidth: 1, borderColor: colors.border,
-      height: 110, textAlignVertical: "top", marginBottom: 24,
+    statusOptionText: { fontSize: 13, fontWeight: "700", color: colors.textSecondary },
+    input: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 15,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 14,
     },
-    modalActions: { flexDirection: "row", gap: 12, marginTop: 16 },
-    cancelarBtn: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: colors.surfaceSecondary, alignItems: "center" },
-    cancelarText: { color: colors.text, fontWeight: "600", fontSize: 16 },
-    salvarBtn: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: "#8b5cf6", alignItems: "center" },
-    salvarText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-    anexoHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-    anexosContainer: { flexDirection: "row", marginBottom: 24 },
-    anexoItem: { position: "relative", marginRight: 12 },
-    anexoImg: { width: 80, height: 80, borderRadius: 12 },
-    anexoRemove: { position: "absolute", top: -6, right: -6, backgroundColor: "#ef4444", width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-    receitaBtn: { flexDirection: "row", backgroundColor: "#0f766e", padding: 16, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-    receitaBtnText: { color: "#fff", fontWeight: "bold", fontSize: 16, marginLeft: 8 },
+    textArea: { height: 96, textAlignVertical: "top" },
+    anexosHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    anexoAddBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 10,
+      backgroundColor: "#ede9fe",
+    },
+    anexoAddText: { color: "#6d28d9", fontWeight: "bold", fontSize: 12 },
+    anexosRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+    anexoItem: { position: "relative" },
+    anexoImg: { width: 76, height: 76, borderRadius: 12 },
+    anexoRemove: { position: "absolute", top: -6, right: -6 },
+    pdfBtn: {
+      borderWidth: 1.5,
+      borderColor: "#8b5cf6",
+      borderRadius: 14,
+      paddingVertical: 13,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10,
+    },
+    pdfBtnText: { color: "#8b5cf6", fontWeight: "bold", fontSize: 14 },
+    saveBtn: {
+      backgroundColor: "#8b5cf6",
+      borderRadius: 14,
+      paddingVertical: 15,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10,
+    },
+    saveBtnText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
   });
 }

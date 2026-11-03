@@ -1,132 +1,119 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, TextInput, Alert } from "react-native";
-import { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Switch,
+  Modal,
+  TextInput,
+  Alert,
+} from "react-native";
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "@/context/ThemeContext";
+import { useRouter } from "expo-router";
+import Header from "@/components/Header";
+import { useTheme, type ThemeColors } from "@/context/ThemeContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useClinicaVet, useSaveClinica } from "@/hooks/useClinica";
+import { useNotificationPreferences } from "@/hooks/useNotifications";
+import { useAppInfo } from "@/hooks/useAppInfo";
+import { formatCurrency, parseCurrency } from "@/utils/currency";
 
-export default function AjustesVet() {
+export default function AjustesVetScreen() {
   const router = useRouter();
   const { colors, isDark, toggleTheme } = useTheme();
+  const { user, updateProfile, logout } = useAuth();
+  const clinicaQuery = useClinicaVet();
+  const saveClinica = useSaveClinica();
+  const { enabled: notificacoes, toggleNotifications } = useNotificationPreferences();
+  const { info } = useAppInfo();
 
-  const [notificacoes, setNotificacoes] = useState(true);
-  const [offline, setOffline] = useState(false);
-
-  // Modal Perfil
   const [modalPerfil, setModalPerfil] = useState(false);
   const [nome, setNome] = useState("");
   const [crmv, setCrmv] = useState("");
 
-  // Modal Clínica
   const [modalClinica, setModalClinica] = useState(false);
   const [nomeClinica, setNomeClinica] = useState("");
   const [enderecoClinica, setEnderecoClinica] = useState("");
   const [valorConsulta, setValorConsulta] = useState("150");
 
-
-  const loadData = async () => {
-    const sessionStr = await AsyncStorage.getItem("@session");
-    if (sessionStr) {
-      const user = JSON.parse(sessionStr);
-      setNome(user.nome || "");
-      setCrmv(user.crmv || "");
-    }
-    const clinicaData = await AsyncStorage.getItem("@clinica_dados");
-    if (clinicaData) {
-      const clinica = JSON.parse(clinicaData);
-      setNomeClinica(clinica.nome || "");
-      setEnderecoClinica(clinica.endereco || "");
-      setValorConsulta(clinica.valorConsulta || "150");
-    }
-    const notif = await AsyncStorage.getItem("@settings_notificacoes");
-    if (notif !== null) setNotificacoes(notif === "true");
+  const abrirModalPerfil = () => {
+    setNome(user?.nome ?? "");
+    setCrmv(user?.crmv ?? "");
+    setModalPerfil(true);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  const abrirModalClinica = () => {
+    setNomeClinica(clinicaQuery.data?.nome ?? "");
+    setEnderecoClinica(clinicaQuery.data?.endereco ?? "");
+    setValorConsulta(String(clinicaQuery.data?.valorConsulta ?? 150));
+    setModalClinica(true);
+  };
 
   const salvarPerfil = async () => {
+    if (!nome.trim()) {
+      Alert.alert("Atenção", "O nome não pode ficar vazio.");
+      return;
+    }
     try {
-      const sessionStr = await AsyncStorage.getItem("@session");
-      if (!sessionStr) return;
-      const user = JSON.parse(sessionStr);
-
-      const updatedUser = { ...user, nome, crmv };
-      await AsyncStorage.setItem("@session", JSON.stringify(updatedUser));
-
-      // Atualizar também na lista de @users
-      const usersData = await AsyncStorage.getItem("@users");
-      if (usersData) {
-        const users = JSON.parse(usersData);
-        const idx = users.findIndex((u: any) => u.id === user.id);
-        if (idx !== -1) {
-          users[idx] = { ...users[idx], nome, crmv };
-          await AsyncStorage.setItem("@users", JSON.stringify(users));
-        }
-      }
-
+      await updateProfile({ nome, crmv });
       setModalPerfil(false);
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível salvar.");
+      Alert.alert("Sucesso", "Perfil profissional atualizado!");
+    } catch {
+      Alert.alert("Erro", "Não foi possível atualizar o perfil.");
     }
   };
 
-  const salvarClinica = async () => {
+  const salvarDadosClinica = async () => {
+    const valorNum = parseCurrency(valorConsulta);
     try {
-      await AsyncStorage.setItem("@clinica_dados", JSON.stringify({ 
-        nome: nomeClinica, 
+      await saveClinica.mutateAsync({
+        nome: nomeClinica,
         endereco: enderecoClinica,
-        valorConsulta: valorConsulta
-      }));
+        valorConsulta: Number.isFinite(valorNum) && valorNum > 0 ? valorNum : 150,
+      });
       setModalClinica(false);
       Alert.alert("Sucesso", "Dados da clínica atualizados!");
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível salvar.");
+    } catch {
+      Alert.alert("Erro", "Não foi possível salvar os dados da clínica.");
     }
-  };
-
-  const handleNotificacoes = async (val: boolean) => {
-    setNotificacoes(val);
-    await AsyncStorage.setItem("@settings_notificacoes", val.toString());
   };
 
   const s = makeStyles(colors);
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={s.title}>Ajustes</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Header title="Ajustes Clínicos" />
 
-      <ScrollView style={s.content} showsVerticalScrollIndicator={false}>
-        
-        <Text style={s.sectionTitle}>Conta e Clínica</Text>
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <Text style={s.sectionTitle}>Profissional e Clínica</Text>
         <View style={s.card}>
-          <TouchableOpacity style={s.rowItem} onPress={() => setModalPerfil(true)}>
+          <TouchableOpacity style={s.rowItem} onPress={abrirModalPerfil}>
             <View style={s.rowLeft}>
-              <Ionicons name="person" size={24} color="#3b82f6" />
-              <View style={{ marginLeft: 16 }}>
-                <Text style={s.rowText}>Editar Perfil e CRMV</Text>
-                {(nome || crmv) && <Text style={s.rowSubText}>{nome}{crmv ? ` • CRMV: ${crmv}` : ""}</Text>}
+              <Ionicons name="medkit" size={23} color="#0d9488" />
+              <View style={{ marginLeft: 14, flex: 1 }}>
+                <Text style={s.rowText}>Perfil Profissional</Text>
+                <Text style={s.rowSubText}>
+                  Dr(a). {user?.nome}
+                  {user?.crmv ? ` • ${user.crmv}` : ""}
+                </Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
+
           <View style={s.divider} />
-          <TouchableOpacity style={s.rowItem} onPress={() => setModalClinica(true)}>
+
+          <TouchableOpacity style={s.rowItem} onPress={abrirModalClinica}>
             <View style={s.rowLeft}>
-              <Ionicons name="business" size={24} color="#3b82f6" />
-              <View style={{ marginLeft: 16 }}>
-                <Text style={s.rowText}>Dados da Clínica</Text>
-                {nomeClinica && <Text style={s.rowSubText}>{nomeClinica} • Consulta: R$ {valorConsulta}</Text>}
+              <Ionicons name="business" size={23} color="#8b5cf6" />
+              <View style={{ marginLeft: 14, flex: 1 }}>
+                <Text style={s.rowText}>Dados da Clínica & Consulta</Text>
+                <Text style={s.rowSubText}>
+                  {clinicaQuery.data?.nome || "Configurar clínica"} •{" "}
+                  {formatCurrency(clinicaQuery.data?.valorConsulta ?? 150)}
+                </Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
@@ -137,76 +124,94 @@ export default function AjustesVet() {
         <View style={s.card}>
           <View style={s.rowItem}>
             <View style={s.rowLeft}>
-              <Ionicons name="notifications" size={24} color="#3b82f6" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Notificações de Consultas</Text>
+              <Ionicons name="notifications" size={23} color="#0d9488" />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Alertas de Novos Agendamentos</Text>
             </View>
-            <Switch 
-              value={notificacoes} 
-              onValueChange={handleNotificacoes}
-              trackColor={{ false: colors.border, true: "#93c5fd" }}
-              thumbColor={notificacoes ? "#3b82f6" : colors.surfaceSecondary}
+            <Switch
+              value={notificacoes}
+              onValueChange={toggleNotifications}
+              trackColor={{ false: colors.border, true: "#99f6e4" }}
+              thumbColor={notificacoes ? "#0d9488" : colors.surfaceSecondary}
             />
           </View>
           <View style={s.divider} />
           <View style={s.rowItem}>
             <View style={s.rowLeft}>
-              <Ionicons name="moon" size={24} color={isDark ? "#a78bfa" : "#3b82f6"} />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Modo Escuro</Text>
+              <Ionicons name="moon" size={23} color={isDark ? "#a78bfa" : "#0d9488"} />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Modo Escuro</Text>
             </View>
-            <Switch 
-              value={isDark} 
+            <Switch
+              value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: colors.border, true: "#a78bfa" }}
+              trackColor={{ false: colors.border, true: "#c4b5fd" }}
               thumbColor={isDark ? "#7c3aed" : colors.surfaceSecondary}
-            />
-          </View>
-          <View style={s.divider} />
-          <View style={s.rowItem}>
-            <View style={s.rowLeft}>
-              <Ionicons name="cloud-offline" size={24} color="#3b82f6" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Sincronização Offline</Text>
-            </View>
-            <Switch 
-              value={offline} 
-              onValueChange={setOffline}
-              trackColor={{ false: colors.border, true: "#93c5fd" }}
-              thumbColor={offline ? "#3b82f6" : colors.surfaceSecondary}
             />
           </View>
         </View>
 
-        <Text style={s.sectionTitle}>Sobre</Text>
+        <Text style={s.sectionTitle}>Suporte e Informações</Text>
         <View style={s.card}>
-          <TouchableOpacity style={s.rowItem}>
+          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/vet/faq")}>
             <View style={s.rowLeft}>
-              <Ionicons name="shield-checkmark" size={24} color="#3b82f6" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Privacidade e Termos</Text>
+              <Ionicons name="help-circle" size={23} color="#10b981" />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Perguntas Frequentes (FAQ)</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
           <View style={s.divider} />
-          <View style={s.rowItem}>
+          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/vet/sac")}>
             <View style={s.rowLeft}>
-              <Ionicons name="information-circle" size={24} color="#3b82f6" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Versão do App (v1.0.0)</Text>
+              <Ionicons name="chatbubbles" size={23} color="#0ea5e9" />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Suporte ao Parceiro (SAC)</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+          <View style={s.divider} />
+          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/sobre")}>
+            <View style={s.rowLeft}>
+              <Ionicons name="information-circle" size={23} color="#4f46e5" />
+              <View style={{ marginLeft: 14, flex: 1 }}>
+                <Text style={s.rowText}>Sobre o App</Text>
+                <Text style={s.rowSubText}>
+                  v{info.version} • commit {info.gitCommitShort}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
 
-        <View style={{ height: 60 }} />
+        <TouchableOpacity style={s.logoutBtn} onPress={logout}>
+          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+          <Text style={s.logoutText}>Encerrar Sessão</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal Editar Perfil */}
       <Modal visible={modalPerfil} animationType="slide" transparent>
         <View style={s.modalOverlay}>
           <View style={s.modalBox}>
-            <Text style={s.modalTitle}>Editar Perfil</Text>
+            <Text style={s.modalTitle}>Perfil Profissional</Text>
             <Text style={s.modalLabel}>Nome Completo</Text>
-            <TextInput style={s.modalInput} value={nome} onChangeText={setNome} placeholderTextColor={colors.textMuted} placeholder="Seu nome" />
+            <TextInput
+              style={s.modalInput}
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Dr(a). Nome"
+              placeholderTextColor={colors.textMuted}
+            />
             <Text style={s.modalLabel}>CRMV</Text>
-            <TextInput style={s.modalInput} value={crmv} onChangeText={setCrmv} placeholderTextColor={colors.textMuted} placeholder="Ex: 12345/SP" />
+            <TextInput
+              style={s.modalInput}
+              value={crmv}
+              onChangeText={setCrmv}
+              placeholder="CRMV-SP 12345"
+              placeholderTextColor={colors.textMuted}
+            />
             <View style={s.modalButtons}>
-              <TouchableOpacity style={s.modalCancelBtn} onPress={() => setModalPerfil(false)}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setModalPerfil(false)}
+              >
                 <Text style={s.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.modalSaveBtn} onPress={salvarPerfil}>
@@ -217,22 +222,43 @@ export default function AjustesVet() {
         </View>
       </Modal>
 
-      {/* Modal Dados da Clínica */}
       <Modal visible={modalClinica} animationType="slide" transparent>
         <View style={s.modalOverlay}>
           <View style={s.modalBox}>
             <Text style={s.modalTitle}>Dados da Clínica</Text>
             <Text style={s.modalLabel}>Nome da Clínica</Text>
-            <TextInput style={s.modalInput} value={nomeClinica} onChangeText={setNomeClinica} placeholderTextColor={colors.textMuted} placeholder="Ex: Clínica VetCare" />
+            <TextInput
+              style={s.modalInput}
+              value={nomeClinica}
+              onChangeText={setNomeClinica}
+              placeholder="Clínica Veterinária PetTrack"
+              placeholderTextColor={colors.textMuted}
+            />
             <Text style={s.modalLabel}>Endereço</Text>
-            <TextInput style={s.modalInput} value={enderecoClinica} onChangeText={setEnderecoClinica} placeholderTextColor={colors.textMuted} placeholder="Rua, número, cidade" />
+            <TextInput
+              style={s.modalInput}
+              value={enderecoClinica}
+              onChangeText={setEnderecoClinica}
+              placeholder="Av. Paulista, 1106 - São Paulo"
+              placeholderTextColor={colors.textMuted}
+            />
             <Text style={s.modalLabel}>Valor Padrão da Consulta (R$)</Text>
-            <TextInput style={s.modalInput} value={valorConsulta} onChangeText={setValorConsulta} placeholderTextColor={colors.textMuted} placeholder="Ex: 150" keyboardType="numeric" />
+            <TextInput
+              style={s.modalInput}
+              value={valorConsulta}
+              onChangeText={setValorConsulta}
+              keyboardType="decimal-pad"
+              placeholder="150,00"
+              placeholderTextColor={colors.textMuted}
+            />
             <View style={s.modalButtons}>
-              <TouchableOpacity style={s.modalCancelBtn} onPress={() => setModalClinica(false)}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setModalClinica(false)}
+              >
                 <Text style={s.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.modalSaveBtn} onPress={salvarClinica}>
+              <TouchableOpacity style={s.modalSaveBtn} onPress={salvarDadosClinica}>
                 <Text style={s.modalSaveText}>Salvar</Text>
               </TouchableOpacity>
             </View>
@@ -243,47 +269,86 @@ export default function AjustesVet() {
   );
 }
 
-function makeStyles(colors: any) {
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 24, paddingTop: 60, paddingBottom: 20, backgroundColor: colors.background,
+    content: { paddingHorizontal: 24, paddingBottom: 48 },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: "bold",
+      color: colors.textMuted,
+      marginTop: 20,
+      marginBottom: 10,
+      marginLeft: 6,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
     },
-    backButton: {
-      width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface,
-      justifyContent: "center", alignItems: "center",
-      shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
-    },
-    title: { fontSize: 22, fontWeight: "bold", color: colors.text },
-    content: { paddingHorizontal: 24 },
-    sectionTitle: { fontSize: 13, fontWeight: "bold", color: colors.textMuted, marginTop: 24, marginBottom: 12, marginLeft: 8, textTransform: "uppercase", letterSpacing: 1 },
     card: {
-      backgroundColor: colors.surface, borderRadius: 16, paddingVertical: 8,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingVertical: 6,
+      elevation: 2,
     },
-    rowItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 16 },
-    rowLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
-    rowText: { fontSize: 16, color: colors.text, fontWeight: "500" },
-    rowSubText: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
-    divider: { height: 1, backgroundColor: colors.borderLight, marginLeft: 56 },
+    rowItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    rowLeft: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
+    rowText: { fontSize: 15, color: colors.text, fontWeight: "600" },
+    rowSubText: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+    divider: { height: 1, backgroundColor: colors.borderLight, marginLeft: 52 },
+    logoutBtn: {
+      marginTop: 28,
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      paddingVertical: 15,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      borderWidth: 1,
+      borderColor: "#ef444440",
+    },
+    logoutText: { color: "#ef4444", fontWeight: "bold", fontSize: 15 },
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
     modalBox: {
-      backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: 28, paddingBottom: 40,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 26,
+      paddingBottom: 38,
     },
-    modalTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 24 },
-    modalLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 8 },
+    modalTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 18 },
+    modalLabel: { fontSize: 13, fontWeight: "600", color: colors.textSecondary, marginBottom: 6 },
     modalInput: {
-      backgroundColor: colors.inputBackground, borderRadius: 12, padding: 16, fontSize: 16,
-      color: colors.text, borderWidth: 1, borderColor: colors.border, marginBottom: 20,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 15,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 14,
     },
-    modalButtons: { flexDirection: "row", gap: 12, marginTop: 8 },
-    modalCancelBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: colors.surfaceSecondary, alignItems: "center" },
-    modalCancelText: { color: colors.text, fontWeight: "600", fontSize: 16 },
-    modalSaveBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: "#3b82f6", alignItems: "center" },
-    modalSaveText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+    modalButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
+    modalCancelBtn: {
+      flex: 1,
+      padding: 15,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: "center",
+    },
+    modalCancelText: { color: colors.text, fontWeight: "600", fontSize: 15 },
+    modalSaveBtn: {
+      flex: 1,
+      padding: 15,
+      borderRadius: 12,
+      backgroundColor: "#0d9488",
+      alignItems: "center",
+    },
+    modalSaveText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
   });
 }
