@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVeterinario() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.perfil == "veterinario";
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /pets/{petId} {
+      allow read: if isSignedIn() && (resource.data.tutorId == request.auth.uid || isVeterinario());
+      allow create: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+    }
+
+    match /vacinas/{docId} {
+      allow read: if isSignedIn() && (resource.data.tutorId == request.auth.uid || isVeterinario());
+      allow create, update: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+    }
+
+    match /medicamentos/{docId} {
+      allow read: if isSignedIn() && (resource.data.tutorId == request.auth.uid || isVeterinario());
+      allow create, update: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+    }
+
+    match /cuidados/{docId} {
+      allow read: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+      allow create, update: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+    }
+
+    match /diario/{docId} {
+      allow read, delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+      allow create, update: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+    }
+
+    match /gastos/{docId} {
+      allow read, delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+      allow create, update: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+    }
+
+    match /rotinas/{docId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.tutorId == request.auth.uid);
+      allow create, update: if isSignedIn() && request.resource.data.tutorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.tutorId == request.auth.uid;
+    }
+
+    match /consultas/{consultaId} {
+      allow read: if isSignedIn() && (resource.data.tutorId == request.auth.uid || isVeterinario());
+      allow create: if isSignedIn() && (request.resource.data.tutorId == request.auth.uid || isVeterinario());
+      allow update: if isSignedIn() && (resource.data.tutorId == request.auth.uid || isVeterinario());
+      allow delete: if isVeterinario();
+    }
+
+    match /clinicas/{vetId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == vetId;
+    }
+
+    match /chamados/{chamadoId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
