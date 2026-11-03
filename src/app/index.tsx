@@ -1,43 +1,28 @@
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
-import { View, ActivityIndicator } from "react-native";
-import { useTheme } from "@/context/ThemeContext";
-import { storage } from "@/service/storage";
+import LoadingScreen from "@/components/LoadingScreen";
+import { useAuth } from "@/hooks/useAuth";
+import { useOnboarding } from "@/hooks/useOnboarding";
 
 export default function IndexScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { user, isLoading } = useAuth();
+  const { isDone } = useOnboarding();
 
   useEffect(() => {
-    checkSession();
-  }, []);
+    if (isLoading || isDone === null) return;
 
-  const checkSession = async () => {
-    try {
-      const onboardingDone = await storage.getOnboardingStatus();
-      if (!onboardingDone) {
-        router.replace("/auth/onboarding");
-        return;
-      }
+    if (!isDone) {
+      router.replace("/auth/onboarding");
+      return;
+    }
 
-      const session = await storage.getSession();
-      if (session) {
-        if (session.perfil === "veterinario") {
-          router.replace("/vet/home");
-        } else {
-          router.replace("/tutor/home");
-        }
-      } else {
-        router.replace("/auth/login");
-      }
-    } catch (e) {
+    if (user) {
+      router.replace(user.perfil === "veterinario" ? "/vet/home" : "/tutor/home");
+    } else {
       router.replace("/auth/login");
     }
-  };
+  }, [isLoading, isDone, user, router]);
 
-  return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
-      <ActivityIndicator size="large" color="#4f46e5" />
-    </View>
-  );
+  return <LoadingScreen message="Iniciando PetTrack..." />;
 }

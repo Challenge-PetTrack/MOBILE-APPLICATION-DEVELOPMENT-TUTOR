@@ -1,28 +1,58 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/context/ThemeContext";
+import Header from "@/components/Header";
+import { useTheme, type ThemeColors } from "@/context/ThemeContext";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  authErrorMessage,
+  isValidEmail,
+  isValidPhone,
+  maskPhone,
+  onlyDigits,
+} from "@/utils/validation";
+import type { Perfil } from "@/types/models";
 
 export default function CadastroUsuarioScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { register } = useAuth();
+
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [crmv, setCrmv] = useState("");
   const [senha, setSenha] = useState("");
-  const [perfil, setPerfil] = useState<"tutor" | "veterinario">("tutor");
+  const [perfil, setPerfil] = useState<Perfil>("tutor");
   const [loading, setLoading] = useState(false);
 
   const handleCadastro = async () => {
-    if (!nome || !email || !senha) {
-      Alert.alert("Erro", "Por favor, preencha todos os campos.");
+    if (!nome.trim() || !email.trim() || !senha) {
+      Alert.alert("Atenção", "Preencha nome, e-mail e senha.");
       return;
     }
-    if (perfil === "tutor" && !telefone) {
-      Alert.alert("Erro", "Tutores precisam informar um número de WhatsApp.");
+    if (!isValidEmail(email)) {
+      Alert.alert("Atenção", "Informe um e-mail válido.");
+      return;
+    }
+    if (senha.length < 6) {
+      Alert.alert("Atenção", "A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (perfil === "tutor" && !isValidPhone(telefone)) {
+      Alert.alert("Atenção", "Informe um número de WhatsApp válido com DDD.");
       return;
     }
 
@@ -30,26 +60,18 @@ export default function CadastroUsuarioScreen() {
       setLoading(true);
       await register({
         nome,
-        email: email.toLowerCase().trim(),
+        email,
         senha,
         perfil,
-        telefone: telefone.replace(/\D/g, "")
+        telefone: perfil === "tutor" ? onlyDigits(telefone) : undefined,
+        crmv: perfil === "veterinario" ? crmv : undefined,
       });
-      
-      Alert.alert("Sucesso", "Conta criada com sucesso!", [
-        { text: "OK", onPress: () => router.replace("/auth/login") }
+
+      Alert.alert("Conta criada!", "Agora faça login com suas credenciais.", [
+        { text: "Ir para o Login", onPress: () => router.replace("/auth/login") },
       ]);
-    } catch (e: any) {
-      console.error(e);
-      let errorMessage = "Não foi possível criar a conta.";
-      if (e.code === 'auth/email-already-in-use') {
-        errorMessage = "Este e-mail já está cadastrado.";
-      } else if (e.code === 'auth/weak-password') {
-        errorMessage = "A senha deve ter pelo menos 6 caracteres.";
-      } else if (e.code === 'auth/invalid-email') {
-        errorMessage = "E-mail inválido.";
-      }
-      Alert.alert("Erro", errorMessage);
+    } catch (error) {
+      Alert.alert("Erro no cadastro", authErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -58,154 +80,200 @@ export default function CadastroUsuarioScreen() {
   const s = makeStyles(colors);
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.contentContainer}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={s.title}>Nova Conta</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <Header title="Nova Conta" />
+      <ScrollView contentContainerStyle={s.contentContainer} keyboardShouldPersistTaps="handled">
+        <View style={s.form}>
+          <Text style={s.sectionTitle}>Escolha seu perfil</Text>
 
-      <View style={s.form}>
-        <Text style={s.sectionTitle}>Escolha seu perfil</Text>
-        
-        <View style={s.roleContainer}>
-          <TouchableOpacity 
-            style={[s.roleCard, perfil === "tutor" && s.roleCardActive]} 
-            onPress={() => setPerfil("tutor")}
-          >
-            <Ionicons name="person" size={32} color={perfil === "tutor" ? "#4f46e5" : colors.textMuted} />
-            <Text style={[s.roleText, perfil === "tutor" && s.roleTextActive]}>Tutor de Pet</Text>
-          </TouchableOpacity>
+          <View style={s.roleContainer}>
+            <TouchableOpacity
+              style={[s.roleCard, perfil === "tutor" && s.roleCardActive]}
+              onPress={() => setPerfil("tutor")}
+            >
+              <Ionicons
+                name="person"
+                size={30}
+                color={perfil === "tutor" ? "#4f46e5" : colors.textMuted}
+              />
+              <Text style={[s.roleText, perfil === "tutor" && s.roleTextActive]}>
+                Tutor de Pet
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[s.roleCard, perfil === "veterinario" && s.roleCardActiveVet]} 
-            onPress={() => setPerfil("veterinario")}
-          >
-            <Ionicons name="medical" size={32} color={perfil === "veterinario" ? "#0d9488" : colors.textMuted} />
-            <Text style={[s.roleText, perfil === "veterinario" && s.roleTextActiveVet]}>Veterinário</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[s.roleCard, perfil === "veterinario" && s.roleCardActiveVet]}
+              onPress={() => setPerfil("veterinario")}
+            >
+              <Ionicons
+                name="medical"
+                size={30}
+                color={perfil === "veterinario" ? "#0d9488" : colors.textMuted}
+              />
+              <Text style={[s.roleText, perfil === "veterinario" && s.roleTextActiveVet]}>
+                Veterinário
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={s.inputGroup}>
-          <Text style={s.label}>Nome Completo</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Digite seu nome"
-            placeholderTextColor={colors.textMuted}
-            value={nome}
-            onChangeText={setNome}
-          />
-        </View>
-
-        <View style={s.inputGroup}>
-          <Text style={s.label}>E-mail</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Digite seu e-mail"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-        </View>
-
-        {perfil === "tutor" && (
           <View style={s.inputGroup}>
-            <Text style={s.label}>WhatsApp {perfil === "tutor" ? "(obrigatório)" : ""}</Text>
-            <View style={s.phoneRow}>
-              <View style={s.phonePrefix}>
-                <Text style={s.phonePrefixText}>🇧🇷 +55</Text>
+            <Text style={s.label}>Nome Completo</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Digite seu nome"
+              placeholderTextColor={colors.textMuted}
+              value={nome}
+              onChangeText={setNome}
+            />
+          </View>
+
+          <View style={s.inputGroup}>
+            <Text style={s.label}>E-mail</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Digite seu e-mail"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </View>
+
+          {perfil === "tutor" ? (
+            <View style={s.inputGroup}>
+              <Text style={s.label}>WhatsApp (obrigatório)</Text>
+              <View style={s.phoneRow}>
+                <View style={s.phonePrefix}>
+                  <Text style={s.phonePrefixText}>+55</Text>
+                </View>
+                <TextInput
+                  style={[s.input, { flex: 1, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]}
+                  placeholder="(11) 99999-9999"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="phone-pad"
+                  value={telefone}
+                  onChangeText={(txt) => setTelefone(maskPhone(txt))}
+                />
               </View>
+            </View>
+          ) : (
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Registro CRMV (opcional)</Text>
               <TextInput
-                style={[s.input, { flex: 1, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]}
-                placeholder="(11) 99999-9999"
+                style={s.input}
+                placeholder="Ex.: CRMV-SP 12345"
                 placeholderTextColor={colors.textMuted}
-                keyboardType="phone-pad"
-                value={telefone}
-                onChangeText={setTelefone}
+                value={crmv}
+                onChangeText={setCrmv}
               />
             </View>
-          </View>
-        )}
-
-        <View style={s.inputGroup}>
-          <Text style={s.label}>Senha</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Crie uma senha"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-            value={senha}
-            onChangeText={setSenha}
-          />
-        </View>
-
-        <TouchableOpacity 
-          style={[s.submitButton, perfil === "veterinario" && s.submitButtonVet, loading && { opacity: 0.7 }]} 
-          onPress={handleCadastro}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={s.submitButtonText}>Criar Conta</Text>
           )}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+          <View style={s.inputGroup}>
+            <Text style={s.label}>Senha (mínimo 6 caracteres)</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Crie uma senha"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry
+              value={senha}
+              onChangeText={setSenha}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              s.submitButton,
+              perfil === "veterinario" && s.submitButtonVet,
+              loading && { opacity: 0.7 },
+            ]}
+            onPress={handleCadastro}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={s.submitButtonText}>Criar Conta</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-function makeStyles(colors: any) {
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    contentContainer: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 32 },
-    backButton: {
-      width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface,
-      justifyContent: "center", alignItems: "center",
-      shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
-    },
-    title: { fontSize: 22, fontWeight: "bold", color: colors.text },
+    contentContainer: { padding: 24, paddingTop: 8, paddingBottom: 40 },
     form: {
-      backgroundColor: colors.surface, borderRadius: 20, padding: 24,
-      shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 24,
+      shadowColor: colors.cardShadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 3,
     },
-    sectionTitle: { fontSize: 16, fontWeight: "bold", color: colors.text, marginBottom: 16, textAlign: "center" },
-    roleContainer: { flexDirection: "row", justifyContent: "space-between", marginBottom: 32 },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      color: colors.text,
+      marginBottom: 16,
+      textAlign: "center",
+    },
+    roleContainer: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
     roleCard: {
-      flex: 1, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 16,
-      alignItems: "center", marginHorizontal: 4, borderWidth: 2, borderColor: "transparent",
+      flex: 1,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 16,
+      padding: 16,
+      alignItems: "center",
+      marginHorizontal: 4,
+      borderWidth: 2,
+      borderColor: "transparent",
     },
     roleCardActive: { backgroundColor: "#e0e7ff", borderColor: "#4f46e5" },
     roleCardActiveVet: { backgroundColor: "#ccfbf1", borderColor: "#0d9488" },
     roleText: { marginTop: 8, fontSize: 14, fontWeight: "600", color: colors.textSecondary },
     roleTextActive: { color: "#4f46e5" },
     roleTextActiveVet: { color: "#0d9488" },
-    inputGroup: { marginBottom: 20 },
+    inputGroup: { marginBottom: 18 },
     label: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 8 },
     phoneRow: { flexDirection: "row" },
     phonePrefix: {
-      backgroundColor: colors.surfaceSecondary, paddingHorizontal: 14, borderRadius: 12,
-      borderTopRightRadius: 0, borderBottomRightRadius: 0, justifyContent: "center",
-      borderWidth: 1, borderColor: colors.border, borderRightWidth: 0,
+      backgroundColor: colors.surfaceSecondary,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderTopRightRadius: 0,
+      borderBottomRightRadius: 0,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRightWidth: 0,
     },
     phonePrefixText: { fontSize: 14, color: colors.text, fontWeight: "600" },
     input: {
-      backgroundColor: colors.inputBackground, borderRadius: 12, padding: 16,
-      fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 16,
+      fontSize: 16,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
     submitButton: {
-      backgroundColor: "#4f46e5", borderRadius: 12, padding: 16, alignItems: "center",
-      marginTop: 8, shadowColor: "#4f46e5", shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+      backgroundColor: "#4f46e5",
+      borderRadius: 12,
+      padding: 16,
+      alignItems: "center",
+      marginTop: 8,
     },
-    submitButtonVet: { backgroundColor: "#0d9488", shadowColor: "#0d9488" },
+    submitButtonVet: { backgroundColor: "#0d9488" },
     submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   });
 }
