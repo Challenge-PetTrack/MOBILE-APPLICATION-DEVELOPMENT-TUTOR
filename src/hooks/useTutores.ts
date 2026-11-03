@@ -1,23 +1,28 @@
-import { useQuery } from '@tanstack/react-query';
-import { tutorService } from '@/service/tutorService';
+import { useCallback } from "react";
+import { Alert } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "./useAuth";
+import { userService } from "@/services/userService";
+import { openWhatsApp } from "@/services/externalLinkService";
 
 export function useTutores() {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['tutores'],
-    queryFn: async () => {
-      const res = await tutorService.getAll();
-      return res.data;
-    },
+    queryKey: ["tutores"],
+    queryFn: () => userService.listByPerfil("tutor"),
+    enabled: user?.perfil === "veterinario",
   });
 }
 
-export function useTutorById(id: number) {
-  return useQuery({
-    queryKey: ['tutor', id],
-    queryFn: async () => {
-      const res = await tutorService.getById(id);
-      return res.data;
-    },
-    enabled: !!id,
-  });
+export function useContactWhatsApp() {
+  return useCallback(async (telefone?: string, mensagem?: string) => {
+    if (!telefone?.trim()) {
+      Alert.alert("Sem WhatsApp", "Este tutor ainda não cadastrou um número de WhatsApp.");
+      return;
+    }
+    const ok = await openWhatsApp(telefone, mensagem);
+    if (!ok) {
+      Alert.alert("Erro", "Não foi possível abrir o WhatsApp neste dispositivo.");
+    }
+  }, []);
 }

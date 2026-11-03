@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { preferencesStorage } from "@/services/preferencesStorage";
 
-// ─── Paleta de Cores ────────────────────────────────────────────────────────
 export const lightColors = {
   background: "#f8f9fa",
   surface: "#ffffff",
@@ -30,38 +29,36 @@ export const darkColors = {
   isDark: true,
 };
 
-export type ThemeColors = typeof lightColors;
+export type ThemeColors = Omit<typeof lightColors, "isDark"> & { isDark: boolean };
 
-// ─── Context ────────────────────────────────────────────────────────────────
 interface ThemeContextData {
   colors: ThemeColors;
   isDark: boolean;
-  toggleTheme: () => void;
+  toggleTheme: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextData>({
   colors: lightColors,
   isDark: false,
-  toggleTheme: () => {},
+  toggleTheme: async () => {},
 });
 
-// ─── Provider ────────────────────────────────────────────────────────────────
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem("@settings_theme").then(val => {
-      if (val === "dark") setIsDark(true);
+    preferencesStorage.getTheme().then((saved) => {
+      if (saved === "dark") setIsDark(true);
     });
   }, []);
 
   const toggleTheme = async () => {
     const next = !isDark;
     setIsDark(next);
-    await AsyncStorage.setItem("@settings_theme", next ? "dark" : "light");
+    await preferencesStorage.setTheme(next ? "dark" : "light");
   };
 
-  const colors = isDark ? darkColors : lightColors;
+  const colors: ThemeColors = isDark ? darkColors : lightColors;
 
   return (
     <ThemeContext.Provider value={{ colors, isDark, toggleTheme }}>
@@ -70,7 +67,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
 export function useTheme() {
   return useContext(ThemeContext);
 }

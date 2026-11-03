@@ -1,75 +1,91 @@
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, useSegments } from 'expo-router';
-import { storage } from '@/service/storage';
-import { RegisterRequest } from '@/service/authService';
-import { auth } from '@/config/firebase';
+import React, { createContext, useState, useEffect, useRef, ReactNode } from "react";
+import { useRouter, useSegments } from "expo-router";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updateProfile as updateFirebaseProfile,
   signOut,
   onAuthStateChanged,
-} from 'firebase/auth';
+  type User as FirebaseUser,
+} from "firebase/auth";
+import { auth } from "@/config/firebase";
+import { queryClient } from "@/config/queryClient";
+import { userService } from "@/services/userService";
+import { nowIso } from "@/services/firestore";
+import type { Perfil, UserProfile } from "@/types/models";
 
-// ─── Types ─────────────────────────────────────────────────────────────────
-
-export interface User {
-  id: number;
+export interface RegisterInput {
   nome: string;
   email: string;
-  perfil: 'tutor' | 'veterinario';
-  uid?: string;
+  senha: string;
+  perfil: Perfil;
+  telefone?: string;
+  crmv?: string;
+}
+
+export interface UpdateProfileInput {
+  nome: string;
+  telefone?: string;
+  crmv?: string;
 }
 
 interface AuthContextData {
-  user: User | null;
+  user: UserProfile | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, senha: string) => Promise<void>;
-  register: (data: RegisterRequest) => Promise<void>;
+  register: (data: RegisterInput) => Promise<void>;
+  updateProfile: (data: UpdateProfileInput) => Promise<void>;
   logout: () => Promise<void>;
 }
 
-// ─── Context ───────────────────────────────────────────────────────────────
-
 export const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-// ─── Provider ──────────────────────────────────────────────────────────────
+async function resolveOrBootstrapProfile(firebaseUser: FirebaseUser): Promise<UserProfile> {
+  const existing = await userService.getProfile(firebaseUser.uid);
+  if (existing) return existing;
+
+  const fallback: UserProfile = {
+    uid: firebaseUser.uid,
+    nome: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuário",
+    email: firebaseUser.email || "",
+    perfil: "tutor",
+    createdAt: nowIso(),
+  };
+  await userService.createProfile(fallback);
+  return fallback;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRegistering, setIsRegistering] = useState(false);
+  const isRegisteringRef = useRef(false);
 
   const router = useRouter();
   const segments = useSegments();
 
-  // ── 1. Restaurar sessão persistida (Firebase + Storage) ────────────────
+  // 1. Restaurar e sincronizar sessão do Firebase Auth + perfil no Firestore
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (isRegisteringRef.current) return;
       try {
         if (firebaseUser) {
-          const session = await storage.getSession();
-          const token = await firebaseUser.getIdToken();
-          const loggedUser: User = {
-            id: firebaseUser.uid.charCodeAt(0) % 10000,
-            nome: firebaseUser.displayName || session?.nome || '',
-            email: firebaseUser.email || '',
-            perfil: session?.perfil || 'tutor',
-            uid: firebaseUser.uid,
-          };
-          setUser(loggedUser);
-          setToken(token);
-
-          // Manter o storage atualizado caso tenha havido mudanças
-          await storage.saveSession({ ...loggedUser, token });
+          const [idToken, profile] = await Promise.all([
+            firebaseUser.getIdToken(),
+            resolveOrBootstrapProfile(firebaseUser),
+          ]);
+          setToken(idToken);
+          setUser(profile);
         } else {
-          setUser(null);
           setToken(null);
+          setUser(null);
         }
       } catch (e) {
-        console.error('Erro ao restaurar sessão Firebase:', e);
+        console.error("Erro ao restaurar sessão:", e);
+        setToken(null);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -78,88 +94,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  // ── 2. Proteção reativa de rotas ───────────────────────────────────────
+  // 2. Proteção reativa de rotas
   useEffect(() => {
-    if (isLoading || isRegistering) return;
+    if (isLoading || isRegisteringRef.current) return;
 
-    const inAuthGroup = segments[0] === 'auth';
-    const inTutorGroup = segments[0] === 'tutor';
-    const inVetGroup = segments[0] === 'vet';
+    const rootSegment = segments[0];
+    const inAuthGroup = rootSegment === "auth";
+    const inProtectedGroup = rootSegment === "tutor" || rootSegment === "vet";
 
-    if (!user && (inTutorGroup || inVetGroup)) {
-      router.replace('/auth/login');
+    if (!user && inProtectedGroup) {
+      router.replace("/auth/login");
     } else if (user && inAuthGroup) {
-      router.replace(user.perfil === 'veterinario' ? '/vet/home' : '/tutor/home');
+      router.replace(user.perfil === "veterinario" ? "/vet/home" : "/tutor/home");
     }
-  }, [user, segments, isLoading, isRegistering]);
+  }, [user, segments, isLoading, router]);
 
-  // ── Login via Firebase Auth ────────────────────────────────────────────
   const login = async (email: string, senha: string) => {
-    // 1. Autenticar no Firebase
-    const credential = await signInWithEmailAndPassword(auth, email, senha);
-    const firebaseToken = await credential.user.getIdToken();
-
-    // 2. Montar dados do usuário a partir do Firebase
-    //    O displayName é salvo no momento do cadastro.
-    //    O campo "perfil" é armazenado em customClaims via Firebase ou em AsyncStorage.
-    const displayName = credential.user.displayName || email.split('@')[0];
-
-    // 3. Tentar recuperar perfil salvo localmente (definido no cadastro)
-    const savedSession = await storage.getSession();
-    const perfil: 'tutor' | 'veterinario' =
-      (savedSession?.email === email ? savedSession?.perfil : null) ?? 'tutor';
-
-    const loggedUser: User = {
-      id: credential.user.uid.charCodeAt(0) % 10000, // ID numérico derivado do UID
-      nome: displayName,
-      email: credential.user.email ?? email,
-      perfil: perfil,
-      uid: credential.user.uid,
-    };
-
-    // 4. Persistir sessão
-    await storage.saveSession({ ...loggedUser, token: firebaseToken });
-    setToken(firebaseToken);
-    setUser(loggedUser);
-    // AuthContext redireciona automaticamente via useEffect de segmentos
+    const credential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), senha);
+    const [idToken, profile] = await Promise.all([
+      credential.user.getIdToken(),
+      resolveOrBootstrapProfile(credential.user),
+    ]);
+    setToken(idToken);
+    setUser(profile);
   };
 
-  // ── Cadastro via Firebase Auth ─────────────────────────────────────────
-  const register = async (data: RegisterRequest) => {
+  const register = async (data: RegisterInput) => {
+    isRegisteringRef.current = true;
     try {
-      setIsRegistering(true);
-      // 1. Criar conta no Firebase Authentication
-      const credential = await createUserWithEmailAndPassword(auth, data.email, data.senha);
+      const normalizedEmail = data.email.trim().toLowerCase();
+      const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, data.senha);
+      await updateFirebaseProfile(credential.user, { displayName: data.nome.trim() });
 
-      // 2. Fazer signout imediatamente, já que o Firebase faz auto-login
-      await signOut(auth);
-
-      // 3. Salvar perfil localmente para uso no login futuro
-      const newUser: User = {
-        id: credential.user.uid.charCodeAt(0) % 10000,
-        nome: data.nome,
-        email: data.email,
-        perfil: data.perfil,
+      const newProfile: UserProfile = {
         uid: credential.user.uid,
+        nome: data.nome.trim(),
+        email: normalizedEmail,
+        perfil: data.perfil,
+        telefone: data.telefone?.trim() || undefined,
+        crmv: data.crmv?.trim() || undefined,
+        createdAt: nowIso(),
       };
 
-      // Nós removemos a sessão atual para garantir que o usuário precise logar manualmente
-      await storage.saveSession(newUser);
+      await userService.createProfile(newProfile);
+
+      // Encerra a sessão automática do Firebase para exigir login explícito
+      await signOut(auth);
       setToken(null);
       setUser(null);
     } finally {
-      setIsRegistering(false);
+      isRegisteringRef.current = false;
     }
   };
 
-  // ── Logout ──────────────────────────────────────────────────────────────
+  const updateProfile = async (data: UpdateProfileInput) => {
+    if (!user) return;
+    const payload = {
+      nome: data.nome.trim(),
+      telefone: data.telefone?.trim() || undefined,
+      crmv: data.crmv?.trim() || undefined,
+    };
+    await userService.updateProfile(user.uid, payload);
+    if (auth.currentUser && payload.nome) {
+      await updateFirebaseProfile(auth.currentUser, { displayName: payload.nome }).catch(() => {});
+    }
+    setUser({ ...user, ...payload });
+    queryClient.invalidateQueries({ queryKey: ["tutores"] });
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
     } catch (e) {
-      console.warn('Erro no signOut Firebase:', e);
+      console.warn("Erro no signOut Firebase:", e);
     }
-    await storage.clearSession();
+    queryClient.clear();
     setToken(null);
     setUser(null);
   };
@@ -173,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         register,
+        updateProfile,
         logout,
       }}
     >
