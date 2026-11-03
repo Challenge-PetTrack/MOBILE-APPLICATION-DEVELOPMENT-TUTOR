@@ -1,93 +1,74 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, TextInput, Alert } from "react-native";
-import { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Switch,
+  Modal,
+  TextInput,
+  Alert,
+} from "react-native";
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "@/context/ThemeContext";
+import { useRouter } from "expo-router";
+import Header from "@/components/Header";
+import { useTheme, type ThemeColors } from "@/context/ThemeContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useNotificationPreferences } from "@/hooks/useNotifications";
+import { useAppInfo } from "@/hooks/useAppInfo";
+import { maskPhone, onlyDigits } from "@/utils/validation";
 
-export default function AjustesTutor() {
+export default function AjustesTutorScreen() {
   const router = useRouter();
   const { colors, isDark, toggleTheme } = useTheme();
+  const { user, updateProfile, logout } = useAuth();
+  const { enabled: notificacoes, scheduledCount, toggleNotifications } =
+    useNotificationPreferences();
+  const { info } = useAppInfo();
 
-  const [notificacoes, setNotificacoes] = useState(true);
-  const [offline, setOffline] = useState(false);
-
-  // Modal Perfil
   const [modalPerfil, setModalPerfil] = useState(false);
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
-
-  const loadData = async () => {
-    const sessionStr = await AsyncStorage.getItem("@session");
-    if (sessionStr) {
-      const user = JSON.parse(sessionStr);
-      setNome(user.nome || "");
-      setTelefone(user.telefone || "");
-    }
-    const notif = await AsyncStorage.getItem("@settings_notificacoes_tutor");
-    if (notif !== null) setNotificacoes(notif === "true");
+  const abrirModalPerfil = () => {
+    setNome(user?.nome ?? "");
+    setTelefone(maskPhone(user?.telefone ?? ""));
+    setModalPerfil(true);
   };
 
   const salvarPerfil = async () => {
-    try {
-      const sessionStr = await AsyncStorage.getItem("@session");
-      if (!sessionStr) return;
-      const user = JSON.parse(sessionStr);
-
-      const updatedUser = { ...user, nome, telefone };
-      await AsyncStorage.setItem("@session", JSON.stringify(updatedUser));
-
-      // Atualizar também na lista de @users
-      const usersData = await AsyncStorage.getItem("@users");
-      if (usersData) {
-        const users = JSON.parse(usersData);
-        const idx = users.findIndex((u: any) => u.id === user.id);
-        if (idx !== -1) {
-          users[idx] = { ...users[idx], nome, telefone };
-          await AsyncStorage.setItem("@users", JSON.stringify(users));
-        }
-      }
-
-      setModalPerfil(false);
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível salvar.");
+    if (!nome.trim()) {
+      Alert.alert("Atenção", "O nome não pode ficar vazio.");
+      return;
     }
-  };
-
-  const handleNotificacoes = async (val: boolean) => {
-    setNotificacoes(val);
-    await AsyncStorage.setItem("@settings_notificacoes_tutor", val.toString());
+    try {
+      await updateProfile({ nome, telefone: onlyDigits(telefone) });
+      setModalPerfil(false);
+      Alert.alert("Sucesso", "Seu perfil foi atualizado.");
+    } catch {
+      Alert.alert("Erro", "Não foi possível atualizar o perfil.");
+    }
   };
 
   const s = makeStyles(colors);
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={s.title}>Ajustes e Perfil</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Header title="Ajustes e Perfil" />
 
-      <ScrollView style={s.content} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Text style={s.sectionTitle}>Conta</Text>
         <View style={s.card}>
-          <TouchableOpacity style={s.rowItem} onPress={() => setModalPerfil(true)}>
+          <TouchableOpacity style={s.rowItem} onPress={abrirModalPerfil}>
             <View style={s.rowLeft}>
-              <Ionicons name="person" size={24} color="#10b981" />
-              <View style={{ marginLeft: 16 }}>
+              <Ionicons name="person" size={23} color="#4f46e5" />
+              <View style={{ marginLeft: 14, flex: 1 }}>
                 <Text style={s.rowText}>Editar Meu Perfil</Text>
-                {(nome || telefone) && <Text style={s.rowSubText}>{nome}{telefone ? ` • Tel: ${telefone}` : ""}</Text>}
+                <Text style={s.rowSubText}>
+                  {user?.nome}
+                  {user?.telefone ? ` • ${maskPhone(user.telefone)}` : ""}
+                </Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
@@ -98,12 +79,19 @@ export default function AjustesTutor() {
         <View style={s.card}>
           <View style={s.rowItem}>
             <View style={s.rowLeft}>
-              <Ionicons name="notifications" size={24} color="#10b981" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Notificações do App</Text>
+              <Ionicons name="notifications" size={23} color="#10b981" />
+              <View style={{ marginLeft: 14, flex: 1 }}>
+                <Text style={s.rowText}>Notificações Locais</Text>
+                <Text style={s.rowSubText}>
+                  {notificacoes
+                    ? `${scheduledCount} lembrete(s) ativo(s)`
+                    : "Notificações desativadas"}
+                </Text>
+              </View>
             </View>
-            <Switch 
-              value={notificacoes} 
-              onValueChange={handleNotificacoes}
+            <Switch
+              value={notificacoes}
+              onValueChange={toggleNotifications}
               trackColor={{ false: colors.border, true: "#a7f3d0" }}
               thumbColor={notificacoes ? "#10b981" : colors.surfaceSecondary}
             />
@@ -111,13 +99,13 @@ export default function AjustesTutor() {
           <View style={s.divider} />
           <View style={s.rowItem}>
             <View style={s.rowLeft}>
-              <Ionicons name="moon" size={24} color={isDark ? "#a78bfa" : "#10b981"} />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Modo Escuro</Text>
+              <Ionicons name="moon" size={23} color={isDark ? "#a78bfa" : "#4f46e5"} />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Modo Escuro</Text>
             </View>
-            <Switch 
-              value={isDark} 
+            <Switch
+              value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: colors.border, true: "#a78bfa" }}
+              trackColor={{ false: colors.border, true: "#c4b5fd" }}
               thumbColor={isDark ? "#7c3aed" : colors.surfaceSecondary}
             />
           </View>
@@ -127,42 +115,66 @@ export default function AjustesTutor() {
         <View style={s.card}>
           <TouchableOpacity style={s.rowItem} onPress={() => router.push("/tutor/faq")}>
             <View style={s.rowLeft}>
-              <Ionicons name="help-circle" size={24} color="#10b981" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Perguntas Frequentes (FAQ)</Text>
+              <Ionicons name="help-circle" size={23} color="#10b981" />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Perguntas Frequentes (FAQ)</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
           <View style={s.divider} />
           <TouchableOpacity style={s.rowItem} onPress={() => router.push("/tutor/sac")}>
             <View style={s.rowLeft}>
-              <Ionicons name="chatbubbles" size={24} color="#10b981" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Fale Conosco (SAC)</Text>
+              <Ionicons name="chatbubbles" size={23} color="#0ea5e9" />
+              <Text style={[s.rowText, { marginLeft: 14 }]}>Fale Conosco (SAC)</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
           <View style={s.divider} />
-          <View style={s.rowItem}>
+          <TouchableOpacity style={s.rowItem} onPress={() => router.push("/sobre")}>
             <View style={s.rowLeft}>
-              <Ionicons name="information-circle" size={24} color="#10b981" />
-              <Text style={[s.rowText, { marginLeft: 16 }]}>Versão do App (v1.0.0)</Text>
+              <Ionicons name="information-circle" size={23} color="#4f46e5" />
+              <View style={{ marginLeft: 14, flex: 1 }}>
+                <Text style={s.rowText}>Sobre o App</Text>
+                <Text style={s.rowSubText}>
+                  v{info.version} • commit {info.gitCommitShort}
+                </Text>
+              </View>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
 
-        <View style={{ height: 60 }} />
+        <TouchableOpacity style={s.logoutBtn} onPress={logout}>
+          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+          <Text style={s.logoutText}>Encerrar Sessão</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal Editar Perfil */}
       <Modal visible={modalPerfil} animationType="slide" transparent>
         <View style={s.modalOverlay}>
           <View style={s.modalBox}>
             <Text style={s.modalTitle}>Editar Perfil</Text>
             <Text style={s.modalLabel}>Nome Completo</Text>
-            <TextInput style={s.modalInput} value={nome} onChangeText={setNome} placeholderTextColor={colors.textMuted} placeholder="Seu nome" />
+            <TextInput
+              style={s.modalInput}
+              value={nome}
+              onChangeText={setNome}
+              placeholderTextColor={colors.textMuted}
+              placeholder="Seu nome"
+            />
             <Text style={s.modalLabel}>Telefone (WhatsApp)</Text>
-            <TextInput style={s.modalInput} value={telefone} onChangeText={setTelefone} placeholderTextColor={colors.textMuted} placeholder="Ex: (11) 99999-9999" keyboardType="phone-pad" />
+            <TextInput
+              style={s.modalInput}
+              value={telefone}
+              onChangeText={(txt) => setTelefone(maskPhone(txt))}
+              placeholderTextColor={colors.textMuted}
+              placeholder="(11) 99999-9999"
+              keyboardType="phone-pad"
+            />
             <View style={s.modalButtons}>
-              <TouchableOpacity style={s.modalCancelBtn} onPress={() => setModalPerfil(false)}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setModalPerfil(false)}
+              >
                 <Text style={s.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.modalSaveBtn} onPress={salvarPerfil}>
@@ -172,52 +184,90 @@ export default function AjustesTutor() {
           </View>
         </View>
       </Modal>
-
     </View>
   );
 }
 
-function makeStyles(colors: any) {
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 24, paddingTop: 60, paddingBottom: 20, backgroundColor: colors.background,
+    content: { paddingHorizontal: 24, paddingBottom: 48 },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: "bold",
+      color: colors.textMuted,
+      marginTop: 20,
+      marginBottom: 10,
+      marginLeft: 6,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
     },
-    backButton: {
-      width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface,
-      justifyContent: "center", alignItems: "center",
-      shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
-    },
-    title: { fontSize: 22, fontWeight: "bold", color: colors.text },
-    content: { paddingHorizontal: 24 },
-    sectionTitle: { fontSize: 13, fontWeight: "bold", color: colors.textMuted, marginTop: 24, marginBottom: 12, marginLeft: 8, textTransform: "uppercase", letterSpacing: 1 },
     card: {
-      backgroundColor: colors.surface, borderRadius: 16, paddingVertical: 8,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingVertical: 6,
+      elevation: 2,
     },
-    rowItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 16 },
-    rowLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
-    rowText: { fontSize: 16, color: colors.text, fontWeight: "500" },
-    rowSubText: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
-    divider: { height: 1, backgroundColor: colors.borderLight, marginLeft: 56 },
+    rowItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    rowLeft: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
+    rowText: { fontSize: 15, color: colors.text, fontWeight: "600" },
+    rowSubText: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+    divider: { height: 1, backgroundColor: colors.borderLight, marginLeft: 52 },
+    logoutBtn: {
+      marginTop: 28,
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      paddingVertical: 15,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      borderWidth: 1,
+      borderColor: "#ef444440",
+    },
+    logoutText: { color: "#ef4444", fontWeight: "bold", fontSize: 15 },
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
     modalBox: {
-      backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      padding: 28, paddingBottom: 40,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 26,
+      paddingBottom: 38,
     },
-    modalTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 24 },
-    modalLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 8 },
+    modalTitle: { fontSize: 20, fontWeight: "bold", color: colors.text, marginBottom: 20 },
+    modalLabel: { fontSize: 13, fontWeight: "600", color: colors.textSecondary, marginBottom: 6 },
     modalInput: {
-      backgroundColor: colors.inputBackground, borderRadius: 12, padding: 16, fontSize: 16,
-      color: colors.text, borderWidth: 1, borderColor: colors.border, marginBottom: 20,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 15,
+      fontSize: 15,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
     },
-    modalButtons: { flexDirection: "row", gap: 12, marginTop: 8 },
-    modalCancelBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: colors.surfaceSecondary, alignItems: "center" },
-    modalCancelText: { color: colors.text, fontWeight: "600", fontSize: 16 },
-    modalSaveBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: "#10b981", alignItems: "center" },
-    modalSaveText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+    modalButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
+    modalCancelBtn: {
+      flex: 1,
+      padding: 15,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: "center",
+    },
+    modalCancelText: { color: colors.text, fontWeight: "600", fontSize: 15 },
+    modalSaveBtn: {
+      flex: 1,
+      padding: 15,
+      borderRadius: 12,
+      backgroundColor: "#4f46e5",
+      alignItems: "center",
+    },
+    modalSaveText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
   });
 }
