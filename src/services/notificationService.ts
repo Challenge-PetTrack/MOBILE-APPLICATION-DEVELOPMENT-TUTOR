@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
+import type * as NotificationsType from "expo-notifications";
 import { preferencesStorage } from "./preferencesStorage";
 import { VACINAS_NOMES, CATALOGO_CUIDADOS } from "@/constants/catalogos";
 import { formatDateTime, minutesToTime, timeToMinutes } from "@/utils/date";
@@ -10,6 +10,8 @@ import type {
   Medicamento,
   VacinaRegistro,
 } from "@/types/models";
+
+export type NotificationResponse = NotificationsType.NotificationResponse;
 
 export const CHANNEL_LEMBRETES = "pettrack-lembretes";
 export const CHANNEL_CONSULTAS = "pettrack-consultas";
@@ -26,48 +28,104 @@ export interface NotificationRouteData {
 
 const isNative = Platform.OS === "android" || Platform.OS === "ios";
 let handlerConfigured = false;
+let cachedNotificationsModule: typeof NotificationsType | null | undefined;
+
+function getNotificationsModule(): typeof NotificationsType | null {
+  if (!isNative) return null;
+  if (cachedNotificationsModule !== undefined) return cachedNotificationsModule;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedNotificationsModule = require("expo-notifications") as typeof NotificationsType;
+  } catch {
+    cachedNotificationsModule = null;
+  }
+  return cachedNotificationsModule;
+}
 
 export function configureNotificationHandler() {
   if (!isNative || handlerConfigured) return;
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return;
   handlerConfigured = true;
 
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  } catch {
+    // Ignora caso o cliente nativo (ex: Expo Go desatualizado) não possua o módulo nativo
+  }
+}
+
+export function observeNotificationResponses(
+  onResponse: (response: NotificationResponse | null | undefined) => void
+): () => void {
+  if (!isNative) return () => {};
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return () => {};
+
+  try {
+    Notifications.getLastNotificationResponseAsync()
+      .then(onResponse)
+      .catch(() => {});
+
+    const sub = Notifications.addNotificationResponseReceivedListener(onResponse);
+    return () => {
+      try {
+        sub.remove();
+      } catch {}
+    };
+  } catch {
+    return () => {};
+  }
+}
+
+export async function clearLastNotificationResponse(): Promise<void> {
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return;
+  try {
+    await Notifications.clearLastNotificationResponseAsync();
+  } catch {}
 }
 
 export async function initializeNotifications(): Promise<boolean> {
   if (!isNative) return false;
+  const Notifications = getNotificationsModule();
+  if (!Notifications) return false;
   configureNotificationHandler();
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(CHANNEL_LEMBRETES, {
-      name: "Lembretes de Saúde do Pet",
-      description: "Horários de medicamentos, vacinas e cuidados preventivos",
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 150, 250],
-      lightColor: "#4f46e5",
-    });
+  try {
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync(CHANNEL_LEMBRETES, {
+        name: "Lembretes de Saúde do Pet",
+        description: "Horários de medicamentos, vacinas e cuidados preventivos",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 150, 250],
+        lightColor: "#4f46e5",
+      });
 
-    await Notifications.setNotificationChannelAsync(CHANNEL_CONSULTAS, {
-      name: "Atualizações de Consultas",
-      description: "Novos agendamentos, confirmações e prontuários liberados",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 300, 150, 300],
-      lightColor: "#0d9488",
-    });
+      await Notifications.setNotificationChannelAsync(CHANNEL_CONSULTAS, {
+        name: "Atualizações de Consultas",
+        description: "Novos agendamentos, confirmações e prontuários liberados",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 300, 150, 300],
+        lightColor: "#0d9488",
+      });
+    }
+
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) return true;
+
+    const requested = await Notifications.requestPermissionsAsync();
+    return requested.granted;
+  } catch {
+    return false;
   }
-
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return true;
-
-  const requested = await Notifications.requestPermissionsAsync();
-  return requested.granted;
 }
 
 async function canSendNotification(): Promise<boolean> {
@@ -95,6 +153,8 @@ export const notificationService = {
   async scheduleMedicamento(med: Medicamento): Promise<void> {
     await this.cancelMedicamento(med.id);
     if (!med.ativo || !(await canSendNotification())) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
 
     const horarios = computeDoseSchedule(med.horarioInicial, med.frequenciaHoras);
     const data: NotificationRouteData = {
@@ -119,13 +179,15 @@ export const notificationService = {
             minute,
             channelId: CHANNEL_LEMBRETES,
           },
-        });
+        }).catch(() => {});
       })
     );
   },
 
   async cancelMedicamento(medId: string): Promise<void> {
     if (!isNative) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
     await Promise.all(
       Array.from({ length: 6 }, (_, idx) =>
         Notifications.cancelScheduledNotificationAsync(medIdentifier(medId, idx)).catch(() => {})
@@ -137,6 +199,8 @@ export const notificationService = {
   async scheduleVacinaBooster(vacina: VacinaRegistro): Promise<void> {
     const id = vacinaIdentifier(vacina.petId, vacina.vacinaId);
     if (!isNative) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
 
     if (!vacina.tomada || !vacina.proximaDose || !(await canSendNotification())) return;
@@ -164,13 +228,15 @@ export const notificationService = {
         date: target,
         channelId: CHANNEL_LEMBRETES,
       },
-    });
+    }).catch(() => {});
   },
 
   /** Agenda lembrete para a próxima aplicação de um cuidado preventivo (às 09:00). */
   async scheduleCuidadoPreventivo(cuidado: CuidadoPreventivo): Promise<void> {
     const id = cuidadoIdentifier(cuidado.petId, cuidado.tipo);
     if (!isNative) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
 
     if (!(await canSendNotification())) return;
@@ -199,13 +265,15 @@ export const notificationService = {
         date: target,
         channelId: CHANNEL_LEMBRETES,
       },
-    });
+    }).catch(() => {});
   },
 
   /** Agenda lembrete automático 1 hora antes da consulta (ou no horário exato se faltar menos de 1h). */
   async scheduleConsultaReminder(consulta: Consulta): Promise<void> {
     const id = consultaReminderIdentifier(consulta.id);
     if (!isNative) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
 
     if (
@@ -239,11 +307,13 @@ export const notificationService = {
         date: triggerDate,
         channelId: CHANNEL_CONSULTAS,
       },
-    });
+    }).catch(() => {});
   },
 
   async cancelConsultaReminder(consultaId: string): Promise<void> {
     if (!isNative) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(
       consultaReminderIdentifier(consultaId)
     ).catch(() => {});
@@ -255,6 +325,8 @@ export const notificationService = {
    */
   async notifyTutorConsultaUpdate(consulta: Consulta, novoStatus: ConsultaStatus): Promise<void> {
     if (!(await canSendNotification())) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
 
     const messages: Record<Exclude<ConsultaStatus, "pendente">, { title: string; body: string }> = {
       confirmada: {
@@ -286,7 +358,7 @@ export const notificationService = {
         data: data as unknown as Record<string, unknown>,
       },
       trigger: Platform.OS === "android" ? { channelId: CHANNEL_CONSULTAS } : null,
-    });
+    }).catch(() => {});
   },
 
   /**
@@ -295,6 +367,8 @@ export const notificationService = {
    */
   async notifyVetNovaConsulta(consulta: Consulta): Promise<void> {
     if (!(await canSendNotification())) return;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
 
     const data: NotificationRouteData = {
       route: "/vet/agenda",
@@ -309,17 +383,27 @@ export const notificationService = {
         data: data as unknown as Record<string, unknown>,
       },
       trigger: Platform.OS === "android" ? { channelId: CHANNEL_CONSULTAS } : null,
-    });
+    }).catch(() => {});
   },
 
   async listScheduledCount(): Promise<number> {
     if (!isNative) return 0;
-    const list = await Notifications.getAllScheduledNotificationsAsync();
-    return list.length;
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return 0;
+    try {
+      const list = await Notifications.getAllScheduledNotificationsAsync();
+      return list.length;
+    } catch {
+      return 0;
+    }
   },
 
   async cancelAll(): Promise<void> {
     if (!isNative) return;
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    const Notifications = getNotificationsModule();
+    if (!Notifications) return;
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    } catch {}
   },
 };

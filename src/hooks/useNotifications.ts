@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { consultaService } from "@/services/consultaService";
 import { medicamentoService } from "@/services/medicamentoService";
 import {
+  clearLastNotificationResponse,
   configureNotificationHandler,
   initializeNotifications,
   notificationService,
+  observeNotificationResponses,
+  type NotificationResponse,
   type NotificationRouteData,
 } from "@/services/notificationService";
 import { preferencesStorage } from "@/services/preferencesStorage";
@@ -88,7 +90,7 @@ export function useNotificationObserver() {
   const handledResponsesRef = useRef<Set<string>>(new Set());
 
   const handleResponse = useCallback(
-    (response: Notifications.NotificationResponse | null | undefined) => {
+    (response: NotificationResponse | null | undefined) => {
       if (!response) return;
       const key = `${response.notification.request.identifier}:${response.notification.date}`;
       if (handledResponsesRef.current.has(key)) return;
@@ -104,7 +106,7 @@ export function useNotificationObserver() {
       if (!isVetRoute && user.perfil !== "tutor") return;
 
       router.push({ pathname: rawData.route as any, params: rawData.params });
-      Notifications.clearLastNotificationResponseAsync().catch(() => {});
+      clearLastNotificationResponse().catch(() => {});
     },
     [router, user]
   );
@@ -114,12 +116,7 @@ export function useNotificationObserver() {
     configureNotificationHandler();
     if (Platform.OS !== "android" && Platform.OS !== "ios") return;
 
-    Notifications.getLastNotificationResponseAsync()
-      .then(handleResponse)
-      .catch(() => {});
-
-    const sub = Notifications.addNotificationResponseReceivedListener(handleResponse);
-    return () => sub.remove();
+    return observeNotificationResponses(handleResponse);
   }, [handleResponse]);
 
   // Solicita permissão ao autenticar e sincroniza consultas em tempo real
