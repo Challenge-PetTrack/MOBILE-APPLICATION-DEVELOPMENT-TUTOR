@@ -157,4 +157,4 @@ Projeto acadêmico desenvolvido para o curso de **Análise e Desenvolvimento de 
 | **Gabriel Sbrana Campos** | RM 565849 |
 | **Moisés Waidemann Molinillo Júnior** | RM 563719 |
 | **Richard Freitas** | RM 566127 |
-| **Thiago Rodrigues da Mota** | RM 563765 |
+| **Thiago Rodrigues da Mota** | RM 563650 |
