@@ -3,9 +3,9 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Adiciona mjs e cjs para bibliotecas modernas como React Query v5
-config.resolver.sourceExts.push('mjs', 'cjs');
-config.resolver.unstable_enablePackageExports = true;
-config.resolver.unstable_conditionNames = ['require', 'import', 'react-native'];
+// Adiciona cjs para bibliotecas como Firebase e desativa package exports para evitar
+// carregamento duplicado de ESM + CJS (@firebase/app) no React Native
+config.resolver.sourceExts.push('cjs');
+config.resolver.unstable_enablePackageExports = false;
 
 module.exports = config;

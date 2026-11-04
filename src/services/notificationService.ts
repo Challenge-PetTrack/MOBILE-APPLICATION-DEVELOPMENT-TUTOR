@@ -1,5 +1,22 @@
 import { Platform } from "react-native";
 import type * as NotificationsType from "expo-notifications";
+import { setNotificationHandler } from "expo-notifications/build/NotificationsHandler";
+import {
+  addNotificationResponseReceivedListener,
+  clearLastNotificationResponseAsync,
+  getLastNotificationResponseAsync,
+} from "expo-notifications/build/NotificationsEmitter";
+import { setNotificationChannelAsync } from "expo-notifications/build/setNotificationChannelAsync";
+import { AndroidImportance } from "expo-notifications/build/NotificationChannelManager.types";
+import {
+  getPermissionsAsync,
+  requestPermissionsAsync,
+} from "expo-notifications/build/NotificationPermissions";
+import { scheduleNotificationAsync } from "expo-notifications/build/scheduleNotificationAsync";
+import { cancelScheduledNotificationAsync } from "expo-notifications/build/cancelScheduledNotificationAsync";
+import { cancelAllScheduledNotificationsAsync } from "expo-notifications/build/cancelAllScheduledNotificationsAsync";
+import { getAllScheduledNotificationsAsync } from "expo-notifications/build/getAllScheduledNotificationsAsync";
+import { SchedulableTriggerInputTypes } from "expo-notifications/build/Notifications.types";
 import { preferencesStorage } from "./preferencesStorage";
 import { VACINAS_NOMES, CATALOGO_CUIDADOS } from "@/constants/catalogos";
 import { formatDateTime, minutesToTime, timeToMinutes } from "@/utils/date";
@@ -28,28 +45,13 @@ export interface NotificationRouteData {
 
 const isNative = Platform.OS === "android" || Platform.OS === "ios";
 let handlerConfigured = false;
-let cachedNotificationsModule: typeof NotificationsType | null | undefined;
-
-function getNotificationsModule(): typeof NotificationsType | null {
-  if (!isNative) return null;
-  if (cachedNotificationsModule !== undefined) return cachedNotificationsModule;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    cachedNotificationsModule = require("expo-notifications") as typeof NotificationsType;
-  } catch {
-    cachedNotificationsModule = null;
-  }
-  return cachedNotificationsModule;
-}
 
 export function configureNotificationHandler() {
   if (!isNative || handlerConfigured) return;
-  const Notifications = getNotificationsModule();
-  if (!Notifications) return;
   handlerConfigured = true;
 
   try {
-    Notifications.setNotificationHandler({
+    setNotificationHandler({
       handleNotification: async () => ({
         shouldShowBanner: true,
         shouldShowList: true,
@@ -58,7 +60,7 @@ export function configureNotificationHandler() {
       }),
     });
   } catch {
-    // Ignora caso o cliente nativo (ex: Expo Go desatualizado) não possua o módulo nativo
+    // Ignora caso o cliente nativo não possua o módulo nativo
   }
 }
 
@@ -66,15 +68,13 @@ export function observeNotificationResponses(
   onResponse: (response: NotificationResponse | null | undefined) => void
 ): () => void {
   if (!isNative) return () => {};
-  const Notifications = getNotificationsModule();
-  if (!Notifications) return () => {};
 
   try {
-    Notifications.getLastNotificationResponseAsync()
+    getLastNotificationResponseAsync()
       .then(onResponse)
       .catch(() => {});
 
-    const sub = Notifications.addNotificationResponseReceivedListener(onResponse);
+    const sub = addNotificationResponseReceivedListener(onResponse);
     return () => {
       try {
         sub.remove();
@@ -86,42 +86,39 @@ export function observeNotificationResponses(
 }
 
 export async function clearLastNotificationResponse(): Promise<void> {
-  const Notifications = getNotificationsModule();
-  if (!Notifications) return;
+  if (!isNative) return;
   try {
-    await Notifications.clearLastNotificationResponseAsync();
+    await clearLastNotificationResponseAsync();
   } catch {}
 }
 
 export async function initializeNotifications(): Promise<boolean> {
   if (!isNative) return false;
-  const Notifications = getNotificationsModule();
-  if (!Notifications) return false;
   configureNotificationHandler();
 
   try {
     if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync(CHANNEL_LEMBRETES, {
+      await setNotificationChannelAsync(CHANNEL_LEMBRETES, {
         name: "Lembretes de Saúde do Pet",
         description: "Horários de medicamentos, vacinas e cuidados preventivos",
-        importance: Notifications.AndroidImportance.HIGH,
+        importance: AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 150, 250],
         lightColor: "#4f46e5",
       });
 
-      await Notifications.setNotificationChannelAsync(CHANNEL_CONSULTAS, {
+      await setNotificationChannelAsync(CHANNEL_CONSULTAS, {
         name: "Atualizações de Consultas",
         description: "Novos agendamentos, confirmações e prontuários liberados",
-        importance: Notifications.AndroidImportance.MAX,
+        importance: AndroidImportance.MAX,
         vibrationPattern: [0, 300, 150, 300],
         lightColor: "#0d9488",
       });
     }
 
-    const current = await Notifications.getPermissionsAsync();
+    const current = await getPermissionsAsync();
     if (current.granted) return true;
 
-    const requested = await Notifications.requestPermissionsAsync();
+    const requested = await requestPermissionsAsync();
     return requested.granted;
   } catch {
     return false;
@@ -153,8 +150,6 @@ export const notificationService = {
   async scheduleMedicamento(med: Medicamento): Promise<void> {
     await this.cancelMedicamento(med.id);
     if (!med.ativo || !(await canSendNotification())) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
 
     const horarios = computeDoseSchedule(med.horarioInicial, med.frequenciaHoras);
     const data: NotificationRouteData = {
@@ -165,7 +160,7 @@ export const notificationService = {
     await Promise.all(
       horarios.map((hhmm, idx) => {
         const [hour, minute] = hhmm.split(":").map(Number);
-        return Notifications.scheduleNotificationAsync({
+        return scheduleNotificationAsync({
           identifier: medIdentifier(med.id, idx),
           content: {
             title: `Hora do medicamento de ${med.petNome}`,
@@ -174,7 +169,7 @@ export const notificationService = {
             data: data as unknown as Record<string, unknown>,
           },
           trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
+            type: SchedulableTriggerInputTypes.DAILY,
             hour,
             minute,
             channelId: CHANNEL_LEMBRETES,
@@ -186,11 +181,9 @@ export const notificationService = {
 
   async cancelMedicamento(medId: string): Promise<void> {
     if (!isNative) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
     await Promise.all(
       Array.from({ length: 6 }, (_, idx) =>
-        Notifications.cancelScheduledNotificationAsync(medIdentifier(medId, idx)).catch(() => {})
+        cancelScheduledNotificationAsync(medIdentifier(medId, idx)).catch(() => {})
       )
     );
   },
@@ -199,9 +192,7 @@ export const notificationService = {
   async scheduleVacinaBooster(vacina: VacinaRegistro): Promise<void> {
     const id = vacinaIdentifier(vacina.petId, vacina.vacinaId);
     if (!isNative) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
-    await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+    await cancelScheduledNotificationAsync(id).catch(() => {});
 
     if (!vacina.tomada || !vacina.proximaDose || !(await canSendNotification())) return;
 
@@ -215,7 +206,7 @@ export const notificationService = {
       params: { petId: vacina.petId },
     };
 
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       identifier: id,
       content: {
         title: `Reforço de vacina de ${vacina.petNome}`,
@@ -224,7 +215,7 @@ export const notificationService = {
         data: data as unknown as Record<string, unknown>,
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        type: SchedulableTriggerInputTypes.DATE,
         date: target,
         channelId: CHANNEL_LEMBRETES,
       },
@@ -235,9 +226,7 @@ export const notificationService = {
   async scheduleCuidadoPreventivo(cuidado: CuidadoPreventivo): Promise<void> {
     const id = cuidadoIdentifier(cuidado.petId, cuidado.tipo);
     if (!isNative) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
-    await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+    await cancelScheduledNotificationAsync(id).catch(() => {});
 
     if (!(await canSendNotification())) return;
 
@@ -252,7 +241,7 @@ export const notificationService = {
       params: { petId: cuidado.petId, tab: "preventivos" },
     };
 
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       identifier: id,
       content: {
         title: `Cuidado preventivo de ${cuidado.petNome}`,
@@ -261,7 +250,7 @@ export const notificationService = {
         data: data as unknown as Record<string, unknown>,
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        type: SchedulableTriggerInputTypes.DATE,
         date: target,
         channelId: CHANNEL_LEMBRETES,
       },
@@ -272,9 +261,7 @@ export const notificationService = {
   async scheduleConsultaReminder(consulta: Consulta): Promise<void> {
     const id = consultaReminderIdentifier(consulta.id);
     if (!isNative) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
-    await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+    await cancelScheduledNotificationAsync(id).catch(() => {});
 
     if (
       consulta.status === "cancelada" ||
@@ -294,7 +281,7 @@ export const notificationService = {
       params: { consultaId: consulta.id },
     };
 
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       identifier: id,
       content: {
         title: `Lembrete de consulta • ${consulta.petNome}`,
@@ -303,7 +290,7 @@ export const notificationService = {
         data: data as unknown as Record<string, unknown>,
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        type: SchedulableTriggerInputTypes.DATE,
         date: triggerDate,
         channelId: CHANNEL_CONSULTAS,
       },
@@ -312,9 +299,7 @@ export const notificationService = {
 
   async cancelConsultaReminder(consultaId: string): Promise<void> {
     if (!isNative) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
-    await Notifications.cancelScheduledNotificationAsync(
+    await cancelScheduledNotificationAsync(
       consultaReminderIdentifier(consultaId)
     ).catch(() => {});
   },
@@ -325,8 +310,6 @@ export const notificationService = {
    */
   async notifyTutorConsultaUpdate(consulta: Consulta, novoStatus: ConsultaStatus): Promise<void> {
     if (!(await canSendNotification())) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
 
     const messages: Record<Exclude<ConsultaStatus, "pendente">, { title: string; body: string }> = {
       confirmada: {
@@ -350,7 +333,7 @@ export const notificationService = {
       params: { consultaId: consulta.id },
     };
 
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       content: {
         title: message.title,
         body: message.body,
@@ -367,15 +350,13 @@ export const notificationService = {
    */
   async notifyVetNovaConsulta(consulta: Consulta): Promise<void> {
     if (!(await canSendNotification())) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
 
     const data: NotificationRouteData = {
       route: "/vet/agenda",
       params: { consultaId: consulta.id, data: consulta.dataHora },
     };
 
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       content: {
         title: `Nova consulta solicitada • ${consulta.petNome}`,
         body: `${consulta.tutorNome} solicitou atendimento para ${formatDateTime(consulta.dataHora)} (${consulta.motivo}).`,
@@ -388,10 +369,8 @@ export const notificationService = {
 
   async listScheduledCount(): Promise<number> {
     if (!isNative) return 0;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return 0;
     try {
-      const list = await Notifications.getAllScheduledNotificationsAsync();
+      const list = await getAllScheduledNotificationsAsync();
       return list.length;
     } catch {
       return 0;
@@ -400,10 +379,8 @@ export const notificationService = {
 
   async cancelAll(): Promise<void> {
     if (!isNative) return;
-    const Notifications = getNotificationsModule();
-    if (!Notifications) return;
     try {
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      await cancelAllScheduledNotificationsAsync();
     } catch {}
   },
 };
